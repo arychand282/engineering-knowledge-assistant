@@ -16,11 +16,13 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:up": "docker compose up -d db",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "seed:dev-user": "tsx scripts/seed-dev-user.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
     "next": "16.4.2",
+    "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -39,6 +41,7 @@
     "eslint-config-prettier": "^10",
     "prettier": "^3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5"
   }

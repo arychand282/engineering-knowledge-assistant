@@ -74,9 +74,9 @@ Membuktikan alur end-to-end berikut:
 - [x] Satu deployment dikonfigurasi untuk satu perusahaan, tanpa tabel atau kolom `tenant_id` dan tanpa alur multi-tenant.
 - [ ] Cabang/pabrik/lokasi dan proyek dapat direpresentasikan bila diperlukan, dengan pengujian akses untuk memastikan pengguna tidak dapat mengakses dokumen di luar cakupan cabang/proyek/role yang diizinkan.
 
-- [ ] Upload PDF teks yang dapat dibaca.
-- [ ] Menyimpan metadata dokumen: nama, nomor, jenis, proyek, revisi, status, tanggal efektif opsional.
-- [ ] Mengekstrak teks per halaman untuk menjaga nomor halaman.
+- [x] Upload PDF teks yang dapat dibaca.
+- [x] Menyimpan metadata dokumen: nama, nomor, jenis, proyek, revisi, status, tanggal efektif opsional.
+- [x] Mengekstrak teks per halaman untuk menjaga nomor halaman.
 - [ ] Membuat embedding secara lokal.
 - [ ] Melakukan pencarian semantik dan/atau full-text search.
 - [ ] Menampilkan chat berbahasa Indonesia.
@@ -664,9 +664,9 @@ Persyaratan:
 
 Checklist minimum:
 
-- [ ] File disimpan di luar direktori publik.
-- [ ] Validasi file berdasarkan isi, bukan ekstensi saja.
-- [ ] Batasi ukuran upload dan jumlah halaman untuk menghindari denial of service.
+- [x] File disimpan di luar direktori publik.
+- [x] Validasi file berdasarkan isi, bukan ekstensi saja.
+- [x] Batasi ukuran upload dan jumlah halaman untuk menghindari denial of service.
 - [ ] Lindungi dari path traversal, malware, dan file parser yang rusak.
 - [x] Gunakan query parameterized/ORM.
 - [ ] Validasi seluruh input dengan schema.
@@ -858,14 +858,14 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 
 ### Fase 2 — Dokumen
 
-- [ ] Implementasi upload PDF yang aman.
-- [ ] Simpan metadata.
-- [ ] Ekstraksi teks per halaman.
-- [ ] Tampilkan status ekstraksi.
-- [ ] Chunking dengan metadata halaman.
+- [x] Implementasi upload PDF yang aman.
+- [x] Simpan metadata.
+- [x] Ekstraksi teks per halaman.
+- [ ] Tampilkan status ekstraksi. (API `GET /api/v1/documents/:id` sudah mengembalikan status ekstraksi per halaman; belum ada UI.)
+- [x] Chunking dengan metadata halaman.
 - [ ] Embedding lokal.
 - [ ] Simpan vector dan full-text index.
-- [ ] Implementasi daftar/detail dokumen.
+- [ ] Implementasi daftar/detail dokumen. (API `GET /api/v1/documents` dan `GET /api/v1/documents/:id` sudah ada; belum ada UI.)
 
 **Hasil:** dokumen dapat diunggah dan dicari.
 
