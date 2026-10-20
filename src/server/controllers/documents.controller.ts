@@ -63,6 +63,8 @@ export async function postDocument(request: Request) {
         document: result.document,
         pageCount: result.pageCount,
         chunkCount: result.chunkCount,
+        embeddedCount: result.embeddedCount,
+        embeddingSkipped: result.embeddingSkipped,
       },
       { status: 201 },
     );

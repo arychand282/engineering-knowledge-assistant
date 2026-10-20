@@ -77,8 +77,8 @@ Membuktikan alur end-to-end berikut:
 - [x] Upload PDF teks yang dapat dibaca.
 - [x] Menyimpan metadata dokumen: nama, nomor, jenis, proyek, revisi, status, tanggal efektif opsional.
 - [x] Mengekstrak teks per halaman untuk menjaga nomor halaman.
-- [ ] Membuat embedding secara lokal.
-- [ ] Melakukan pencarian semantik dan/atau full-text search.
+- [x] Membuat embedding secara lokal.
+- [x] Melakukan pencarian semantik dan/atau full-text search.
 - [ ] Menampilkan chat berbahasa Indonesia.
 - [ ] Menampilkan sumber yang berasal dari hasil retrieval, bukan sumber yang dikarang oleh LLM.
 - [ ] Menolak menjawab jika bukti tidak memadai.
@@ -286,11 +286,14 @@ engineering-knowledge-assistant/
 │   │   │   ├── chat/
 │   │   │   │   ├── ask-question.usecase.ts
 │   │   │   │   └── manage-conversation.usecase.ts
+│   │   │   ├── retrieval/
+│   │   │   │   └── search-documents.usecase.ts
 │   │   │   └── admin/
 │   │   ├── repositories/
 │   │   │   ├── document.repository.ts
 │   │   │   ├── document-page.repository.ts
 │   │   │   ├── document-chunk.repository.ts
+│   │   │   ├── document-access.repository.ts
 │   │   │   ├── conversation.repository.ts
 │   │   │   ├── message.repository.ts
 │   │   │   ├── message-source.repository.ts
@@ -310,10 +313,10 @@ engineering-knowledge-assistant/
 │   │   │   ├── extract-pdf.ts
 │   │   │   ├── chunk-text.ts
 │   │   │   └── metadata.ts
+│   │   ├── storage/
+│   │   │   └── local-storage.ts
 │   │   ├── retrieval/
-│   │   │   ├── embed.ts
-│   │   │   ├── search.ts
-│   │   │   └── rerank.ts
+│   │   │   └── merge-results.ts
 │   │   ├── ai/
 │   │   │   ├── ollama-client.ts
 │   │   │   ├── prompts.ts
@@ -340,6 +343,10 @@ Agar aplikasi tetap scalable dan mudah di-reuse/di-test, setiap endpoint API men
 6. `src/lib/` tetap menjadi tempat utilitas teknis lintas domain yang tidak spesifik pada satu use case (koneksi database, client Ollama, auth/session helper, parser PDF, chunking, permission helper). Usecase memanggil `lib/`, bukan sebaliknya.
 
 Struktur ini harus dipertahankan mulai dari Task 3 (ingestion) dan seterusnya; jangan menulis ulang logika controller/usecase/repository langsung di dalam `route.ts` meskipun endpoint masih sederhana.
+
+**Catatan penyesuaian struktur (Task 4):** `lib/retrieval/embed.ts` tidak dibuat terpisah — fungsi embed digabung ke `lib/ai/ollama-client.ts` karena keduanya hanya memanggil Ollama (menghindari pass-through layer tanpa nilai tambah). `lib/retrieval/search.ts`/`rerank.ts` diganti `lib/retrieval/merge-results.ts` (fungsi murni Reciprocal Rank Fusion); query vector/full-text sesungguhnya tetap di `server/repositories/document-chunk.repository.ts` sesuai prinsip di atas — `lib/` tidak boleh mengakses database. Reranker model lokal (bukan RRF) tetap di roadmap "Fase lanjutan", belum Task 4.
+
+**Model akses retrieval (Task 4, sementara):** dokumen hanya terlihat oleh pengguna jika ada baris `document_access` yang mengizinkan salah satu role pengguna tersebut (default-deny). Kolom `project_id`/`site_id` pada `document_access` belum dipakai sebagai pembatas tambahan karena belum ada tabel penugasan user↔proyek/cabang (lihat §18 keputusan 12); tidak ada bypass otomatis untuk role `admin`. Kebijakan RBAC final ditentukan di Task 6.
 
 **Penting:** file dokumen upload tidak boleh disimpan di repository Git. Untuk development, gunakan volume lokal yang diabaikan Git. Untuk produksi, pilih object storage atau file storage internal yang disetujui.
 
@@ -863,16 +870,16 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 - [x] Ekstraksi teks per halaman.
 - [ ] Tampilkan status ekstraksi. (API `GET /api/v1/documents/:id` sudah mengembalikan status ekstraksi per halaman; belum ada UI.)
 - [x] Chunking dengan metadata halaman.
-- [ ] Embedding lokal.
-- [ ] Simpan vector dan full-text index.
+- [x] Embedding lokal.
+- [x] Simpan vector dan full-text index.
 - [ ] Implementasi daftar/detail dokumen. (API `GET /api/v1/documents` dan `GET /api/v1/documents/:id` sudah ada; belum ada UI.)
 
 **Hasil:** dokumen dapat diunggah dan dicari.
 
 ### Fase 3 — Chat RAG
 
-- [ ] Integrasi model lokal.
-- [ ] Implementasi retrieval.
+- [ ] Integrasi model lokal. (Ollama embedding sudah terintegrasi di Task 4; model chat/LLM lokal menyusul di Task 5.)
+- [x] Implementasi retrieval. (`searchDocuments` — hybrid vector + full-text dengan filter akses; belum dipanggil dari endpoint chat.)
 - [ ] Implementasi prompt berbasis konteks.
 - [ ] Validasi format respons.
 - [ ] Validasi source ID di backend.
@@ -992,7 +999,7 @@ Catat jawaban sebagai Architecture Decision Record (ADR) ketika tersedia.
 1. **Kebijakan jaringan:** apakah AI hanya harus berjalan di server internal, atau lingkungan harus benar-benar air-gapped?
 2. **Dokumen:** berapa banyak dokumen, ukuran total, bahasa, proporsi PDF scan, dan apakah terdapat tabel/gambar teknis?
 3. **Pengendalian dokumen:** siapa yang menetapkan status effective, superseded, dan hierarki antar dokumen?
-4. **Akses:** apakah hak akses berdasarkan proyek, departemen, klasifikasi, atau kombinasi?
+4. **Akses:** apakah hak akses berdasarkan proyek, departemen, klasifikasi, atau kombinasi? Termasuk: apakah perusahaan ingin RBAC granular per dokumen, atau sebagian/semua pengguna boleh membaca semua dokumen tanpa pembatasan ("open access")? Implementasi saat ini (Task 4, `getAccessibleDocumentIds`) default-deny ketat — dokumen baru tidak otomatis terlihat siapa pun kecuali ada baris `document_access` eksplisit. Opsi desain untuk mode "tanpa pembatasan" jika klien memintanya: (a) flag `documents.visibility: 'restricted' | 'company_wide'` per dokumen, atau (b) saklar kebijakan di `company_settings.settings` (mis. `documentAccessPolicy: 'open'`) yang melewati pengecekan grant sama sekali. Jangan diimplementasikan sebelum ada permintaan/klarifikasi dari klien.
 5. **Pengguna:** jumlah pengguna total dan concurrent users.
 6. **Hardware:** apakah perusahaan sudah menyediakan server GPU atau harus dianggarkan?
 7. **AI model:** model lokal mana yang disetujui oleh IT/security/legal?

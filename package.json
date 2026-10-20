@@ -17,6 +17,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
+    "ai:up": "docker compose up -d ollama",
+    "ai:down": "docker compose stop ollama",
+    "ai:pull-embedding-model": "tsx scripts/pull-embedding-model.ts",
     "seed:dev-user": "tsx scripts/seed-dev-user.ts"
   },
   "dependencies": {

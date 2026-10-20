@@ -15,6 +15,13 @@
       "when": 1792418968994,
       "tag": "0001_init_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792430308110,
+      "tag": "0002_add_chunk_search_indexes",
+      "breakpoints": true
     }
   ]
 }

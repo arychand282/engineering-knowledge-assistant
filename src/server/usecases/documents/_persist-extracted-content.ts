@@ -11,10 +11,13 @@ import {
   type NewDocumentPage,
   type DocumentPageRow,
 } from "@/server/repositories/document-page.repository";
+import { embedChunks } from "./_embed-chunks";
 
 export interface PersistedContent {
   pages: DocumentPageRow[];
   chunks: DocumentChunkRow[];
+  embeddedCount: number;
+  embeddingSkipped: boolean;
 }
 
 /** Shared by upload and reprocess: turns already-extracted pages into stored rows. */
@@ -47,6 +50,7 @@ export async function persistExtractedContent(
     tokenCount: chunk.tokenCount,
   }));
   const chunks = await insertChunks(chunkRows);
+  const { embeddedCount, skipped } = await embedChunks(chunks);
 
-  return { pages, chunks };
+  return { pages, chunks, embeddedCount, embeddingSkipped: skipped };
 }

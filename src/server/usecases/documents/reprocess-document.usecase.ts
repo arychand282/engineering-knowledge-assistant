@@ -11,6 +11,8 @@ export interface ReprocessDocumentResult {
   documentId: string;
   pageCount: number;
   chunkCount: number;
+  embeddedCount: number;
+  embeddingSkipped: boolean;
 }
 
 export async function reprocessDocument(documentId: string): Promise<ReprocessDocumentResult> {
@@ -26,7 +28,16 @@ export async function reprocessDocument(documentId: string): Promise<ReprocessDo
 
   await deleteChunksByDocumentId(documentId);
   await deletePagesByDocumentId(documentId);
-  const { pages, chunks } = await persistExtractedContent(documentId, extractedPages);
+  const { pages, chunks, embeddedCount, embeddingSkipped } = await persistExtractedContent(
+    documentId,
+    extractedPages,
+  );
 
-  return { documentId, pageCount: pages.length, chunkCount: chunks.length };
+  return {
+    documentId,
+    pageCount: pages.length,
+    chunkCount: chunks.length,
+    embeddedCount,
+    embeddingSkipped,
+  };
 }

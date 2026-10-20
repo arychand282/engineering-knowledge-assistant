@@ -21,6 +21,8 @@ export interface UploadDocumentResult {
   document: DocumentRow;
   pageCount: number;
   chunkCount: number;
+  embeddedCount: number;
+  embeddingSkipped: boolean;
 }
 
 export async function uploadDocument(input: UploadDocumentInput): Promise<UploadDocumentResult> {
@@ -66,9 +68,18 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Upload
       uploadedBy,
     });
 
-    const { pages, chunks } = await persistExtractedContent(document.id, extractedPages);
+    const { pages, chunks, embeddedCount, embeddingSkipped } = await persistExtractedContent(
+      document.id,
+      extractedPages,
+    );
 
-    return { document, pageCount: pages.length, chunkCount: chunks.length };
+    return {
+      document,
+      pageCount: pages.length,
+      chunkCount: chunks.length,
+      embeddedCount,
+      embeddingSkipped,
+    };
   } catch (error) {
     await deleteStoredFile(storageKey);
     throw error;

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, integer, pgTable, text, timestamp, uuid, vector } from "drizzle-orm/pg-core";
+import { check, index, integer, pgTable, text, timestamp, uuid, vector } from "drizzle-orm/pg-core";
 import { env } from "@/lib/env";
 import { documents } from "./documents";
 
@@ -27,5 +27,15 @@ export const documentChunks = pgTable(
   (table) => [
     check("document_chunks_page_start_positive", sql`${table.pageStart} >= 1`),
     check("document_chunks_page_end_gte_start", sql`${table.pageEnd} >= ${table.pageStart}`),
+    // 'simple' config (no stemming): content is Indonesian and Postgres ships no
+    // built-in Indonesian text-search dictionary. Still tokenizes/lowercases correctly.
+    index("document_chunks_content_fts_idx").using(
+      "gin",
+      sql`to_tsvector('simple', ${table.content})`,
+    ),
+    index("document_chunks_embedding_hnsw_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
   ],
 );
