@@ -38,6 +38,26 @@ const baseEnvSchema = z.object({
   OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
+
+  SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
+  LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(15 * 60_000),
+  UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(20),
+  UPLOAD_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60_000),
+  CHAT_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(30),
+  CHAT_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60_000),
 });
 
 export type Env = {
@@ -64,6 +84,13 @@ export type Env = {
   OPENAI_MODEL: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL: string;
+  SESSION_TTL_HOURS: number;
+  LOGIN_RATE_LIMIT_MAX_ATTEMPTS: number;
+  LOGIN_RATE_LIMIT_WINDOW_MS: number;
+  UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: number;
+  UPLOAD_RATE_LIMIT_WINDOW_MS: number;
+  CHAT_RATE_LIMIT_MAX_ATTEMPTS: number;
+  CHAT_RATE_LIMIT_WINDOW_MS: number;
 };
 
 function loadEnv(): Env {
@@ -91,6 +118,13 @@ function loadEnv(): Env {
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    SESSION_TTL_HOURS: process.env.SESSION_TTL_HOURS,
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+    LOGIN_RATE_LIMIT_WINDOW_MS: process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
+    UPLOAD_RATE_LIMIT_MAX_ATTEMPTS: process.env.UPLOAD_RATE_LIMIT_MAX_ATTEMPTS,
+    UPLOAD_RATE_LIMIT_WINDOW_MS: process.env.UPLOAD_RATE_LIMIT_WINDOW_MS,
+    CHAT_RATE_LIMIT_MAX_ATTEMPTS: process.env.CHAT_RATE_LIMIT_MAX_ATTEMPTS,
+    CHAT_RATE_LIMIT_WINDOW_MS: process.env.CHAT_RATE_LIMIT_WINDOW_MS,
   });
 
   if (!parsed.success) {

@@ -1,27 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useDevUser } from "@/components/dev-user-provider";
+import { useAuth } from "@/components/auth/auth-provider";
 import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
 import { DocumentTable } from "./document-table";
 import type { DocumentRowView } from "./types";
 import { UploadForm } from "./upload-form";
 
+const DOCUMENT_MANAGEMENT_ROLES = ["admin", "document_controller"];
+
 export function DocumentsPageClient() {
-  const { userId } = useDevUser();
+  const { user } = useAuth();
+  const canUpload = user?.roles.some((role) => DOCUMENT_MANAGEMENT_ROLES.includes(role)) ?? false;
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadDocuments = useCallback(async () => {
-    if (!userId) return;
     try {
-      const res = await apiFetch(userId, "/api/v1/documents?pageSize=50");
+      const res = await apiFetch("/api/v1/documents?pageSize=50");
       const data = await parseJsonOrThrow<{ items: DocumentRowView[] }>(res);
       setDocuments(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memuat daftar dokumen.");
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     // Standard fetch-on-mount — setState inside loadDocuments only runs after its
@@ -30,22 +32,16 @@ export function DocumentsPageClient() {
     void loadDocuments();
   }, [loadDocuments]);
 
-  if (!userId) {
-    return (
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Atur User ID (dev) di bagian atas halaman terlebih dahulu untuk melihat/mengunggah dokumen.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Unggah dokumen baru
-        </h2>
-        <UploadForm onUploaded={loadDocuments} />
-      </section>
+      {canUpload ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Unggah dokumen baru
+          </h2>
+          <UploadForm onUploaded={loadDocuments} />
+        </section>
+      ) : null}
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">

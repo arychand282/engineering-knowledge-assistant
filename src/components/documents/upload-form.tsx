@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useDevUser } from "@/components/dev-user-provider";
 import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
 
 const DOCUMENT_TYPE_SUGGESTIONS = [
@@ -22,17 +21,12 @@ interface UploadResult {
 }
 
 export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
-  const { userId } = useDevUser();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!userId) {
-      setError("Atur User ID (dev) terlebih dahulu di bagian atas halaman.");
-      return;
-    }
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -42,7 +36,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
     setResult(null);
 
     try {
-      const res = await apiFetch(userId, "/api/v1/documents", { method: "POST", body: formData });
+      const res = await apiFetch("/api/v1/documents", { method: "POST", body: formData });
       const data = await parseJsonOrThrow<UploadResult>(res);
       setResult(data);
       form.reset();

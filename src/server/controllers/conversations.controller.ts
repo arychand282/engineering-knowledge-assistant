@@ -7,33 +7,33 @@ import {
 } from "@/server/usecases/chat/manage-conversation.usecase";
 import { ConversationNotFoundError } from "@/server/usecases/chat/errors";
 import { jsonError, zodBadRequest } from "./_http-errors";
-import { MissingActorError, getTemporaryActorId } from "./_temporary-actor";
+import { type Actor, UnauthenticatedError, getActor } from "./_actor";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function resolveActor(request: Request): string | Response {
+async function resolveActor(): Promise<Actor | Response> {
   try {
-    return getTemporaryActorId(request);
+    return await getActor();
   } catch (error) {
-    if (error instanceof MissingActorError) {
+    if (error instanceof UnauthenticatedError) {
       return jsonError(401, error.message);
     }
     throw error;
   }
 }
 
-export async function getConversations(request: Request) {
-  const actor = resolveActor(request);
+export async function getConversations() {
+  const actor = await resolveActor();
   if (actor instanceof Response) {
     return actor;
   }
 
-  const items = await listConversations(actor);
+  const items = await listConversations(actor.id);
   return NextResponse.json({ items });
 }
 
-export async function getConversationById(request: Request, context: RouteContext) {
-  const actor = resolveActor(request);
+export async function getConversationById(_request: Request, context: RouteContext) {
+  const actor = await resolveActor();
   if (actor instanceof Response) {
     return actor;
   }
@@ -44,7 +44,7 @@ export async function getConversationById(request: Request, context: RouteContex
   }
 
   try {
-    const result = await getConversation(paramsResult.data.id, actor);
+    const result = await getConversation(paramsResult.data.id, actor.id);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ConversationNotFoundError) {
@@ -54,8 +54,8 @@ export async function getConversationById(request: Request, context: RouteContex
   }
 }
 
-export async function deleteConversationById(request: Request, context: RouteContext) {
-  const actor = resolveActor(request);
+export async function deleteConversationById(_request: Request, context: RouteContext) {
+  const actor = await resolveActor();
   if (actor instanceof Response) {
     return actor;
   }
@@ -66,7 +66,7 @@ export async function deleteConversationById(request: Request, context: RouteCon
   }
 
   try {
-    await removeConversation(paramsResult.data.id, actor);
+    await removeConversation(paramsResult.data.id, actor.id);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof ConversationNotFoundError) {

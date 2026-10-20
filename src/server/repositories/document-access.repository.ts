@@ -10,6 +10,11 @@ import { documentAccess, userRoles } from "@/lib/db/schema";
  * rather than guessed at. That only under-restricts relative to a future stricter
  * policy, never over-grants beyond the role-based grant already enforced here.
  *
+ * This function has NO role bypass and must stay that way — it is also what the chat
+ * retrieval path (`searchDocuments`) uses, and that path never bypasses access for any
+ * role (see `src/server/auth/roles.ts`). The `admin`/`document_controller` management
+ * bypass is applied separately, only in the document list/detail/reprocess usecases.
+ *
  * No "open access" / "everyone sees everything" mode exists yet — every document
  * requires an explicit grant, including newly uploaded ones. If a client asks for that,
  * see PLANNING.md #18 decision 4 for the two design options noted there (don't build

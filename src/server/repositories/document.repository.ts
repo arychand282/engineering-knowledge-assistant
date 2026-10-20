@@ -33,8 +33,17 @@ export interface ListDocumentsResult {
   total: number;
 }
 
-export async function listDocuments(filter: ListDocumentsQuery): Promise<ListDocumentsResult> {
+export async function listDocuments(
+  filter: ListDocumentsQuery,
+  restrictToDocumentIds?: string[],
+): Promise<ListDocumentsResult> {
   const conditions = [];
+  if (restrictToDocumentIds) {
+    if (restrictToDocumentIds.length === 0) {
+      return { items: [], total: 0 };
+    }
+    conditions.push(inArray(documents.id, restrictToDocumentIds));
+  }
   if (filter.status) {
     conditions.push(eq(documents.status, filter.status));
   }

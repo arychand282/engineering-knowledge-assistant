@@ -1,19 +1,35 @@
 import { NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
+import { env } from "@/lib/env";
 import { postChatMessageSchema } from "@/server/dto/chat.dto";
 import { askQuestion } from "@/server/usecases/chat/ask-question.usecase";
 import { ConversationNotFoundError } from "@/server/usecases/chat/errors";
-import { jsonError, zodBadRequest } from "./_http-errors";
-import { MissingActorError, getTemporaryActorId } from "./_temporary-actor";
+import { jsonError, rateLimited, zodBadRequest } from "./_http-errors";
+import { UnauthenticatedError, getActor } from "./_actor";
 
 export async function postChat(request: Request) {
   let userId: string;
   try {
-    userId = getTemporaryActorId(request);
+    const actor = await getActor();
+    userId = actor.id;
   } catch (error) {
-    if (error instanceof MissingActorError) {
+    if (error instanceof UnauthenticatedError) {
       return jsonError(401, error.message);
     }
     throw error;
+  }
+
+  const rateLimit = checkRateLimit(
+    "chat",
+    userId,
+    env.CHAT_RATE_LIMIT_MAX_ATTEMPTS,
+    env.CHAT_RATE_LIMIT_WINDOW_MS,
+  );
+  if (!rateLimit.allowed) {
+    return rateLimited(
+      "Terlalu banyak pertanyaan dalam waktu singkat. Coba lagi nanti.",
+      rateLimit.retryAfterMs,
+    );
   }
 
   const body = await request.json().catch(() => null);

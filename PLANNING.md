@@ -234,9 +234,8 @@ engineering-knowledge-assistant/
 │   └── seed-demo.ts
 ├── src/
 │   ├── app/
-│   │   ├── (auth)/
-│   │   │   └── login/
-│   │   ├── (app)/
+│   │   ├── login/                 (bukan route group — tidak butuh layout bersama)
+│   │   ├── (app)/                 (layout bersama: AuthProvider + nav + AppShell)
 │   │   │   ├── chat/
 │   │   │   ├── documents/
 │   │   │   └── admin/
@@ -246,11 +245,15 @@ engineering-knowledge-assistant/
 │   │           │   ├── route.ts
 │   │           │   └── ai/
 │   │           │       └── route.ts
+│   │           ├── auth/
+│   │           │   ├── login/route.ts
+│   │           │   ├── logout/route.ts
+│   │           │   └── me/route.ts
 │   │           ├── documents/
 │   │           │   ├── route.ts
 │   │           │   └── [id]/
 │   │           │       ├── route.ts
-│   │           │       ├── pages/
+│   │           │       ├── pages/                  (belum ada — lihat README "Keterbatasan")
 │   │           │       │   └── [page]/
 │   │           │       │       └── route.ts
 │   │           │       └── reprocess/
@@ -262,26 +265,35 @@ engineering-knowledge-assistant/
 │   │           │   └── [id]/
 │   │           │       └── route.ts
 │   │           └── admin/
-│   │               └── ...
+│   │               ├── users/route.ts
+│   │               ├── users/[id]/route.ts
+│   │               └── audit-events/route.ts
 │   ├── components/
+│   │   ├── auth/                  (auth-provider.tsx, app-shell.tsx)
 │   │   ├── chat/
 │   │   ├── documents/
-│   │   ├── admin/
 │   │   └── ui/
 │   ├── server/
+│   │   ├── auth/
+│   │   │   └── roles.ts           (konstanta role + kebijakan bypass — lihat §10)
 │   │   ├── controllers/
 │   │   │   ├── health.controller.ts
+│   │   │   ├── auth.controller.ts
 │   │   │   ├── documents.controller.ts
 │   │   │   ├── chat.controller.ts
 │   │   │   ├── conversations.controller.ts
 │   │   │   └── admin.controller.ts
 │   │   ├── usecases/
 │   │   │   ├── health/
+│   │   │   ├── auth/
+│   │   │   │   ├── login.usecase.ts
+│   │   │   │   ├── logout.usecase.ts
+│   │   │   │   └── resolve-actor.usecase.ts
 │   │   │   ├── documents/
 │   │   │   │   ├── upload-document.usecase.ts
 │   │   │   │   ├── list-documents.usecase.ts
 │   │   │   │   ├── get-document.usecase.ts
-│   │   │   │   ├── update-document.usecase.ts
+│   │   │   │   ├── update-document.usecase.ts   (belum ada — lihat README "Keterbatasan")
 │   │   │   │   └── reprocess-document.usecase.ts
 │   │   │   ├── chat/
 │   │   │   │   ├── ask-question.usecase.ts
@@ -289,6 +301,9 @@ engineering-knowledge-assistant/
 │   │   │   ├── retrieval/
 │   │   │   │   └── search-documents.usecase.ts
 │   │   │   └── admin/
+│   │   │       ├── list-users.usecase.ts
+│   │   │       ├── update-user.usecase.ts
+│   │   │       └── list-audit-events.usecase.ts
 │   │   ├── repositories/
 │   │   │   ├── document.repository.ts
 │   │   │   ├── document-page.repository.ts
@@ -299,16 +314,20 @@ engineering-knowledge-assistant/
 │   │   │   ├── message-source.repository.ts
 │   │   │   ├── user.repository.ts
 │   │   │   ├── role.repository.ts
-│   │   │   └── audit.repository.ts
+│   │   │   ├── session.repository.ts
+│   │   │   └── audit-event.repository.ts
 │   │   └── dto/
 │   │       ├── documents.dto.ts
 │   │       ├── chat.dto.ts
+│   │       ├── auth.dto.ts
 │   │       └── admin.dto.ts
 │   ├── lib/
 │   │   ├── auth/
+│   │   │   ├── password.ts        (hash/verify, scrypt bawaan node:crypto)
+│   │   │   ├── session-token.ts
+│   │   │   ├── session-cookie.ts
+│   │   │   └── rate-limit.ts      (in-memory, per-proses — lihat README "Keterbatasan")
 │   │   ├── db/
-│   │   ├── permissions/
-│   │   ├── audit/
 │   │   ├── documents/
 │   │   │   ├── extract-pdf.ts
 │   │   │   ├── chunk-text.ts
@@ -352,7 +371,7 @@ Struktur ini harus dipertahankan mulai dari Task 3 (ingestion) dan seterusnya; j
 
 **Catatan penyesuaian struktur (Task 4):** `lib/retrieval/embed.ts` tidak dibuat terpisah — fungsi embed digabung ke `lib/ai/ollama-client.ts` karena keduanya hanya memanggil Ollama (menghindari pass-through layer tanpa nilai tambah). `lib/retrieval/search.ts`/`rerank.ts` diganti `lib/retrieval/merge-results.ts` (fungsi murni Reciprocal Rank Fusion); query vector/full-text sesungguhnya tetap di `server/repositories/document-chunk.repository.ts` sesuai prinsip di atas — `lib/` tidak boleh mengakses database. Reranker model lokal (bukan RRF) tetap di roadmap "Fase lanjutan", belum Task 4.
 
-**Model akses retrieval (Task 4, sementara):** dokumen hanya terlihat oleh pengguna jika ada baris `document_access` yang mengizinkan salah satu role pengguna tersebut (default-deny). Kolom `project_id`/`site_id` pada `document_access` belum dipakai sebagai pembatas tambahan karena belum ada tabel penugasan user↔proyek/cabang (lihat §18 keputusan 12); tidak ada bypass otomatis untuk role `admin`. Kebijakan RBAC final ditentukan di Task 6.
+**Model akses retrieval (final, lihat §10 dan Task 6):** dokumen hanya terlihat oleh pengguna jika ada baris `document_access` yang mengizinkan salah satu role pengguna tersebut (default-deny). Kolom `project_id`/`site_id` pada `document_access` belum dipakai sebagai pembatas tambahan karena belum ada tabel penugasan user↔proyek/cabang (lihat §18 keputusan 12). **Untuk jalur chat/retrieval ini secara spesifik, tidak ada bypass untuk role apa pun, termasuk `admin`** — kebijakan ini final dan tidak berubah oleh keputusan Task 6 di bawah, yang hanya menambahkan bypass pada jalur manajemen dokumen (list/detail/reprocess), bukan pada jalur yang mengirim konten ke model AI.
 
 **Penting:** file dokumen upload tidak boleh disimpan di repository Git. Untuk development, gunakan volume lokal yang diabaikan Git. Untuk produksi, pilih object storage atau file storage internal yang disetujui.
 
@@ -724,6 +743,17 @@ Persyaratan:
 - Semua operasi perubahan status/revisi dicatat di audit log.
 - Siapkan prosedur menonaktifkan akun dan mencabut session.
 
+**Status implementasi (Task 6, selesai):** seluruh persyaratan di atas sudah diimplementasikan, dengan catatan berikut:
+
+- Session berbasis database (tabel `sessions`, token acak di-hash dengan SHA-256 sebelum disimpan), bukan JWT — dipilih spesifik supaya logout dan nonaktifkan akun berlaku seketika tanpa menunggu kedaluwarsa token. Cookie: `HttpOnly`, `SameSite=Lax`, `Secure` otomatis saat `NODE_ENV=production`.
+- Password di-hash dengan `scrypt` (modul bawaan Node `node:crypto`, bukan dependency baru).
+- **Kebijakan bypass akses dokumen (keputusan final Task 6):** `admin`/`document_controller` bisa melihat/mengelola semua dokumen (list/detail/reprocess) tanpa perlu baris `document_access` — mereka mengelola katalog dokumen itu sendiri. `engineer`/`viewer` tetap dibatasi ketat ke `document_access`. Jalur chat/retrieval **tidak pernah** di-bypass untuk role apa pun (lihat §5, baris model akses retrieval) — privilese manajemen tidak pernah menjadi privilese baca konten AI secara diam-diam. Lihat `src/server/auth/roles.ts` untuk definisi kode kebijakan ini.
+- IDOR dicegah dengan mengembalikan `404` (bukan `403`) untuk dokumen/percakapan yang tidak bisa diakses pengguna — tidak membocorkan keberadaan resource.
+- Rate limiting: in-memory per-proses (lihat README "Keterbatasan"), bukan store terdistribusi — cukup untuk prototype satu instance, perlu diganti (mis. Redis) sebelum deployment multi-instance.
+- Audit log mencakup login/logout (sukses & gagal) dan upload/reprocess/perubahan role/aktivasi-deaktivasi akun; belum mencakup setiap pembacaan dokumen/chat (hanya perubahan state, sesuai scope persyaratan di atas).
+- MFA **belum diimplementasikan** — tidak ada kebutuhan eksplisit yang mewajibkannya untuk prototype ini ("jika didukung dan diwajibkan" di atas); dicatat sebagai keterbatasan, bukan diabaikan diam-diam.
+- Endpoint admin minimal (`/api/v1/admin/users`, `/api/v1/admin/audit-events`) dan halaman `/admin` dibuat sesuai kebutuhan nyata dari persyaratan "prosedur menonaktifkan akun" dan "pengelolaan role" — bukan scope yang diperluas tanpa kebutuhan jelas.
+
 ---
 
 ## 11. Keamanan Aplikasi dan Data
@@ -733,20 +763,20 @@ Checklist minimum:
 - [x] File disimpan di luar direktori publik.
 - [x] Validasi file berdasarkan isi, bukan ekstensi saja.
 - [x] Batasi ukuran upload dan jumlah halaman untuk menghindari denial of service.
-- [ ] Lindungi dari path traversal, malware, dan file parser yang rusak.
+- [ ] Lindungi dari path traversal, malware, dan file parser yang rusak. _(parser rusak sudah ditangani sejak Task 3 (`CorruptPdfError`) dan path traversal tidak mungkin karena `storageKey` selalu UUID yang digenerate server, bukan nama file pengguna; scanning malware belum ada.)_
 - [x] Gunakan query parameterized/ORM.
-- [ ] Validasi seluruh input dengan schema.
-- [ ] Terapkan CSRF protection bila pola autentikasi memerlukannya.
-- [ ] Batasi CORS dan host yang diizinkan.
-- [ ] Jangan log secret, token, atau isi dokumen rahasia.
+- [x] Validasi seluruh input dengan schema. _(Zod di semua DTO, termasuk `auth.dto.ts`/`admin.dto.ts` baru di Task 6.)_
+- [x] Terapkan CSRF protection bila pola autentikasi memerlukannya. _(cookie sesi `SameSite=Lax`, bukan token CSRF terpisah — lihat README "Keterbatasan" untuk batas pendekatan ini.)_
+- [x] Batasi CORS dan host yang diizinkan. _(tidak ada header `Access-Control-Allow-Origin` ditambahkan di mana pun — default Next.js same-origin tetap berlaku, jadi request cross-origin browser ditolak begitu saja.)_
+- [x] Jangan log secret, token, atau isi dokumen rahasia. _(password/token sesi tidak pernah di-`console.log`/error; lihat `src/lib/auth/password.ts`, `session-token.ts`.)_
 - [ ] Jangan mengirim telemetri atau crash report ke pihak luar tanpa persetujuan.
 - [ ] Pin versi dependency dan audit dependency.
-- [ ] Simpan secret di environment/secret manager; `.env` tidak boleh masuk Git.
+- [x] Simpan secret di environment/secret manager; `.env` tidak boleh masuk Git. _(sudah sejak Task 1, diverifikasi ulang `git status` sebelum setiap commit.)_
 - [ ] Buat backup terenkripsi dan uji restore.
 - [ ] Tetapkan retensi chat, file, dan audit log.
 - [ ] Terapkan network egress policy untuk runtime AI pada deployment yang memerlukannya.
 - [ ] Uji prompt injection dalam dokumen dan pertanyaan.
-- [ ] Uji bahwa pengguna tidak bisa mengambil sumber yang tidak memiliki akses.
+- [x] Uji bahwa pengguna tidak bisa mengambil sumber yang tidak memiliki akses. _(`tests/integration/auth.test.ts` + `retrieval.test.ts` + `manage-conversation.test.ts` — IDOR dicegah dengan `404`.)_
 - [ ] Dokumentasikan threat model dan respons insiden.
 
 **Catatan:** keamanan, kepatuhan, dan lokasi pemrosesan harus diverifikasi bersama tim IT/security/legal perusahaan. Prototype bukan sertifikasi keamanan.
@@ -768,6 +798,15 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
   - Jangan mengembalikan secret, detail jaringan sensitif, atau konfigurasi internal.
 - `GET /api/v1/health/ai`
   - Memeriksa ketersediaan model lokal dengan output yang aman.
+
+### Autentikasi (Task 6)
+
+- `POST /api/v1/auth/login`
+  - Input: `email`, `password`. Output: identitas + role. Set cookie sesi `HttpOnly`/`SameSite=Lax`. Rate-limited per email.
+- `POST /api/v1/auth/logout`
+  - Mencabut sesi aktif (token di-hash lalu dicari di tabel `sessions`) dan menghapus cookie. Idempotent.
+- `GET /api/v1/auth/me`
+  - Identitas + role pengguna yang sedang login (`401` jika sesi tidak valid/kedaluwarsa/dicabut).
 
 ### Dokumen
 
@@ -801,6 +840,15 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
 - Endpoint pengelolaan user, role, dan audit berada di `/api/v1/admin/...` dan hanya dibuat jika dibutuhkan untuk scope MVP.
 - Semua endpoint admin harus memeriksa izin di server.
 - Jangan membangun endpoint yang tidak memiliki use case dan kriteria penerimaan jelas.
+
+**Diimplementasikan di Task 6** (role `admin` saja untuk ketiganya):
+
+- `GET /api/v1/admin/users`
+  - Daftar pengguna + role + status aktif.
+- `PATCH /api/v1/admin/users/:id`
+  - `{"isActive"?: boolean, "roleNames"?: string[]}` — mengubah role dan/atau menonaktifkan akun. Menonaktifkan (`isActive: false`) langsung mencabut semua sesi aktif akun tersebut (prosedur "nonaktifkan akun + cabut session" dari §10).
+- `GET /api/v1/admin/audit-events`
+  - Daftar audit log terbaru (pagination), untuk kebutuhan "Admin sederhana" di §13.
 
 ---
 
@@ -950,16 +998,16 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 
 ### Fase 4 — Keamanan dasar
 
-- [ ] Implementasi login dan session.
-- [ ] Implementasi role dasar.
-- [ ] Implementasi kontrol akses dokumen.
-- [ ] Filter akses sebelum retrieval.
-- [ ] Implementasi audit log.
-- [ ] Rate limiting.
-- [ ] Uji akses langsung dan IDOR.
-- [ ] Periksa log dan error agar tidak membocorkan data.
+- [x] Implementasi login dan session.
+- [x] Implementasi role dasar.
+- [x] Implementasi kontrol akses dokumen.
+- [x] Filter akses sebelum retrieval. _(sudah sejak Task 4; Task 6 menambahkan bypass manajemen untuk admin/document_controller khusus di luar jalur retrieval — lihat §5, §10.)_
+- [x] Implementasi audit log. _(login/logout, upload/reprocess, perubahan role/status akun — bukan setiap pembacaan.)_
+- [x] Rate limiting. _(login/upload/chat, in-memory per-proses — lihat README "Keterbatasan".)_
+- [x] Uji akses langsung dan IDOR. _(`tests/integration/auth.test.ts`.)_
+- [x] Periksa log dan error agar tidak membocorkan data. _(404 bukan 403 untuk resource tak berizin; password/token tidak pernah dilog.)_
 
-**Hasil:** MVP memiliki batas akses yang dapat diuji.
+**Hasil:** MVP memiliki batas akses yang dapat diuji. ✅ Selesai (Task 6).
 
 ### Fase 5 — Kualitas dan demo
 
@@ -1154,6 +1202,7 @@ Claude Code harus bekerja secara bertahap dan tidak mencoba membangun seluruh si
 - Terapkan server-side access checks untuk semua endpoint `/api/v1/...` di layer controller/usecase, bukan hanya di `route.ts`.
 - Tambahkan audit log dan rate limiting.
 - Tambahkan integration tests untuk unauthorized access dan IDOR.
+- *(Selesai. Sekaligus menemukan dan memperbaiki gap nyata dari Task 3: `GET /api/v1/documents`, `GET /api/v1/documents/:id`, dan `POST /api/v1/documents/:id/reprocess` sebelumnya TIDAK PUNYA pengecekan akses sama sekali — bahkan header placeholder pun tidak diwajibkan. Juga memfinalisasi kebijakan bypass `admin`/`document_controller` untuk manajemen dokumen yang sebelumnya ditandai "menunggu Task 6" di §5/§10 — lihat §10 untuk detail lengkap kebijakan dan keterbatasannya (MFA, rate limiting in-memory).)*
 
 **Task 7 — Evaluation and polish**
 

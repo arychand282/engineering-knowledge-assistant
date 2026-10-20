@@ -8,3 +8,10 @@ export function jsonError(status: number, message: string) {
 export function zodBadRequest(error: z.ZodError) {
   return NextResponse.json({ error: "Validasi gagal.", issues: error.issues }, { status: 400 });
 }
+
+export function rateLimited(message: string, retryAfterMs: number) {
+  return NextResponse.json(
+    { error: message },
+    { status: 429, headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) } },
+  );
+}

@@ -9,5 +9,6 @@ export * from "./message-sources";
 export * from "./messages";
 export * from "./projects";
 export * from "./roles";
+export * from "./sessions";
 export * from "./sites";
 export * from "./users";

@@ -21,6 +21,11 @@ import { buildTestPdf } from "../helpers/build-test-pdf";
 let userId: string;
 const createdDocumentIds: string[] = [];
 
+/** `admin` bypasses document_access for management reads — irrelevant to what these tests assert (ingestion mechanics, not RBAC). */
+function managementActor() {
+  return { id: userId, roles: ["admin"] };
+}
+
 function baseMetadata(overrides: Partial<Parameters<typeof uploadDocument>[0]["metadata"]> = {}) {
   return {
     title: "Dokumen Uji Integrasi",
@@ -74,7 +79,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
     const stored = await readStoredFile(result.document.storageKey);
     expect(stored.equals(pdf)).toBe(true);
 
-    const detail = await getDocument(result.document.id);
+    const detail = await getDocument(result.document.id, managementActor());
     expect(detail.pages).toHaveLength(1);
     expect(detail.pages[0]).toMatchObject({ pageNumber: 1, extractionStatus: "success" });
     expect(detail.chunkCount).toBe(1);
@@ -94,7 +99,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
     });
     createdDocumentIds.push(result.document.id);
 
-    const detail = await getDocument(result.document.id);
+    const detail = await getDocument(result.document.id, managementActor());
     expect(detail.pages).toHaveLength(2);
     expect(detail.pages[1]).toMatchObject({
       pageNumber: 2,
@@ -201,14 +206,14 @@ describe("reprocessDocument", () => {
     });
     createdDocumentIds.push(uploaded.document.id);
 
-    const before = await getDocument(uploaded.document.id);
+    const before = await getDocument(uploaded.document.id, managementActor());
     const firstPageId = before.pages[0].id;
 
     const result = await reprocessDocument(uploaded.document.id);
     expect(result.pageCount).toBe(1);
     expect(result.chunkCount).toBe(1);
 
-    const after = await getDocument(uploaded.document.id);
+    const after = await getDocument(uploaded.document.id, managementActor());
     expect(after.pages[0].id).not.toBe(firstPageId); // old row deleted, new one inserted
     expect(after.pages[0].extractedText).toContain("Versi awal konten dokumen.");
   });

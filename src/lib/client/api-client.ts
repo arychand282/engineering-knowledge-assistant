@@ -1,23 +1,8 @@
-export class MissingDevUserError extends Error {
-  constructor() {
-    super("Atur User ID (dev) terlebih dahulu di bagian atas halaman.");
-    this.name = "MissingDevUserError";
-  }
-}
-
-/** Adds the temporary x-user-id header. Never overrides content-type — callers set it
- * themselves for JSON bodies, and FormData uploads need the browser to set it instead. */
-export async function apiFetch(
-  userId: string | null,
-  input: string,
-  init: RequestInit = {},
-): Promise<Response> {
-  if (!userId) {
-    throw new MissingDevUserError();
-  }
-  const headers = new Headers(init.headers);
-  headers.set("x-user-id", userId);
-  return fetch(input, { ...init, headers });
+/** Thin fetch wrapper: the session cookie is sent automatically by the browser for
+ * same-origin requests, so there is nothing to attach here — this only exists so every
+ * call shares one response-parsing convention. */
+export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, init);
 }
 
 export async function parseJsonOrThrow<T>(response: Response): Promise<T> {

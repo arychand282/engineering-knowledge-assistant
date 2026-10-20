@@ -3,9 +3,9 @@
 Aplikasi pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. Lihat
 `PLANNING.md` untuk rencana kerja lengkap, batasan keamanan, dan roadmap tahapan.
 
-> **Status saat ini:** Task 1–5 selesai (fondasi aplikasi, database, document ingestion,
-> local embeddings & retrieval, dan chat RAG lokal). Belum ada autentikasi sungguhan —
-> Task 6 menyusul.
+> **Status saat ini:** Task 1–6 selesai (fondasi aplikasi, database, document ingestion,
+> local embeddings & retrieval, chat RAG lokal, dan autentikasi/otorisasi sungguhan).
+> Task 7 (evaluasi dan polish) menyusul.
 
 ## Stack
 
@@ -70,35 +70,80 @@ ketersediaan model embedding lokal di
 Selain endpoint API di atas, ada UI minimal untuk memudahkan demo/manual testing tanpa
 `curl`:
 
+- `/login` — login dengan email/password sungguhan (lihat "Autentikasi dan otorisasi"
+  di bawah untuk cara membuat akun dev).
 - `/` — halaman beranda dengan tautan ke Chat dan Dokumen.
-- `/documents` — unggah dokumen baru (form) dan lihat daftar dokumen yang sudah diunggah.
+- `/documents` — unggah dokumen baru (form, hanya tampil untuk role `admin`/
+  `document_controller`) dan lihat daftar dokumen yang bisa diakses.
 - `/chat` — sidebar percakapan (buat baru/pilih/hapus) + thread chat, menampilkan status
   jawaban (`answered` / `insufficient_evidence` / `conflict_detected`) dan sumber kutipan
   per pesan.
+- `/admin` — hanya untuk role `admin`: kelola role/status aktif tiap pengguna, dan lihat
+  audit log terbaru.
 
-Karena autentikasi sungguhan belum ada (Task 6), UI memakai mekanisme sementara **"Mode
-dev"**: bar di bagian atas setiap halaman meminta sebuah User ID yang disimpan di
-`localStorage` browser, lalu dikirim sebagai header `x-user-id` di setiap request —
-mekanisme yang persis sama dengan `x-user-id` di endpoint API, hanya dibungkus UI. Isi
-dengan id hasil `npm run seed:dev-user` (lihat bawah) untuk mulai mengunggah dokumen atau
-chat dari browser. Ini bukan kontrol keamanan — siapa pun yang tahu sebuah user id bisa
-memakainya — dan akan digantikan oleh login sungguhan di Task 6.
+Semua halaman di atas (kecuali `/login`) dilindungi oleh pengecekan sesi di client
+(redirect ke `/login` kalau belum login) **dan** oleh otorisasi server-side pada setiap
+endpoint API yang dipanggilnya — pengecekan di client hanya untuk UX, bukan kontrol
+keamanan (sesuai PLANNING.md §10 "Jangan mengandalkan filtering di frontend").
+
+### Autentikasi dan otorisasi (Task 6)
+
+Role dasar (PLANNING.md §10): `admin`, `document_controller`, `engineer`, `viewer`.
+Login sungguhan pakai email/password (di-hash dengan `scrypt`, bukan plaintext) dan
+session berbasis cookie `HttpOnly` + `SameSite=Lax` (+ `Secure` otomatis saat
+`NODE_ENV=production`) yang disimpan di tabel `sessions` — **bukan JWT** supaya logout
+dan nonaktifkan akun langsung berlaku tanpa menunggu token kedaluwarsa.
+
+Buat akun dev sekali saja (idempotent, aman dijalankan berulang — juga otomatis mengisi
+tabel `roles` kalau masih kosong):
+
+```bash
+npm run seed:dev-user
+# mencetak: user id, email (dev@example.local), dan password (DevPassword123!)
+# role: admin (bisa kelola semua dokumen + /admin)
+```
+
+Login lewat `curl` (simpan cookie ke file untuk dipakai permintaan berikutnya):
+
+```bash
+curl -c cookies.txt -X POST http://localhost:3000/api/v1/auth/login \
+  -H "content-type: application/json" \
+  -d '{"email": "dev@example.local", "password": "DevPassword123!"}'
+```
+
+Lalu sertakan `-b cookies.txt` di setiap permintaan berikutnya (termasuk upload, chat,
+dan endpoint admin). `POST /api/v1/auth/logout` mencabut sesi; `GET /api/v1/auth/me`
+mengembalikan identitas + role pengguna yang sedang login.
+
+**Kebijakan RBAC yang difinalisasi di Task 6** (menggantikan catatan "menunggu Task 6" di
+versi sebelumnya): `admin` dan `document_controller` bisa melihat/mengelola **semua**
+dokumen (list, detail, reprocess) terlepas dari baris `document_access` — mereka yang
+mengelola katalog dokumen, jadi tidak masuk akal kalau mereka sendiri tidak bisa melihat
+dokumen yang perlu dipublikasikan. `engineer`/`viewer` tetap dibatasi ketat ke
+`document_access` (default-deny, seperti Task 4). **Jalur chat/retrieval TIDAK PERNAH
+di-bypass untuk role apa pun, termasuk `admin`** — supaya hak kelola dokumen tidak pernah
+diam-diam menjadi hak baca konten lewat AI. Dokumen yang tidak bisa diakses pengguna
+mengembalikan `404` (bukan `403`) di endpoint detail — mencegah IDOR lewat existence leak.
+
+Endpoint admin (role `admin` saja): `GET /api/v1/admin/users` (daftar pengguna + role),
+`PATCH /api/v1/admin/users/:id` (`{"isActive": false}` dan/atau `{"roleNames": [...]}`) —
+menonaktifkan akun (`isActive: false`) langsung mencabut **semua** sesi aktif akun
+tersebut, ini prosedur "nonaktifkan akun + cabut session" yang diminta PLANNING.md §10.
+`GET /api/v1/admin/audit-events` (log login/logout/upload/reprocess/perubahan role
+terbaru, dengan pagination).
+
+Rate limiting (in-memory, per-proses — lihat "Keterbatasan" di bawah): login dibatasi per
+email (`LOGIN_RATE_LIMIT_MAX_ATTEMPTS`/`_WINDOW_MS`, default 10/15 menit), upload per
+pengguna (`UPLOAD_RATE_LIMIT_*`, default 20/jam), chat per pengguna (`CHAT_RATE_LIMIT_*`,
+default 30/jam) — respons `429` menyertakan header `Retry-After` (detik).
 
 ### Mengunggah dokumen (Task 3)
 
-Belum ada autentikasi (Task 6), jadi setiap request ke `/api/v1/documents` sementara
-butuh header `x-user-id` berisi id user yang benar-benar ada di tabel `users`. Buat user
-dev sekali saja:
+Setiap request ke `/api/v1/documents` butuh sesi login aktif (lihat di atas), dan role
+`admin`/`document_controller` khusus untuk upload/reprocess:
 
 ```bash
-npm run seed:dev-user   # mencetak user id, idempotent (aman dijalankan berulang)
-```
-
-Lalu unggah PDF:
-
-```bash
-curl -X POST http://localhost:3000/api/v1/documents \
-  -H "x-user-id: <user id dari seed:dev-user>" \
+curl -b cookies.txt -X POST http://localhost:3000/api/v1/documents \
   -F "title=Nama Dokumen" \
   -F "documentNumber=SOP-001" \
   -F "documentType=procedure" \
@@ -125,18 +170,18 @@ kata — lihat `buildOrTsQuery`) dan vector search (pgvector, cosine similarity)
 Reciprocal Rank Fusion. Lihat `tests/integration/retrieval.test.ts` untuk contoh pemakaian
 nyata (termasuk kasus akses ditolak).
 
-**Model akses saat ini (sementara, menunggu kebijakan RBAC final di Task 6):**
+**Model akses (final, lihat "Autentikasi dan otorisasi" di atas):** untuk chat/retrieval,
 dokumen hanya terlihat jika ada baris `document_access` yang mengizinkan salah satu role
-milik pengguna — _default-deny_. Kolom `project_id`/`site_id` pada `document_access` belum
-diterapkan sebagai pembatas tambahan (belum ada tabel penugasan user↔proyek/cabang). Belum
-ada mode "semua user boleh baca semua dokumen" — lihat PLANNING.md §18 keputusan 4 untuk
-opsi desainnya jika klien memintanya nanti.
+milik pengguna — _default-deny_, **tanpa bypass untuk role apa pun**. Kolom
+`project_id`/`site_id` pada `document_access` belum diterapkan sebagai pembatas tambahan
+(belum ada tabel penugasan user↔proyek/cabang). Belum ada mode "semua user boleh baca
+semua dokumen" — lihat PLANNING.md §18 keputusan 4 untuk opsi desainnya jika klien
+memintanya nanti.
 
 ### Chat RAG (Task 5)
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/chat \
-  -H "x-user-id: <user id>" \
+curl -b cookies.txt -X POST http://localhost:3000/api/v1/chat \
   -H "content-type: application/json" \
   -d '{"message": "Siapa yang wajib memeriksa tekanan boiler setiap hari?"}'
 ```
@@ -295,8 +340,14 @@ hanya pemanggilan model **chat** (`generateChatCompletion`) yang di-mock di
 (lihat bagian "Chat RAG" di atas), jadi tidak layak dijalankan berulang di test suite
 otomatis. Jalur retrieval, akses, dan deteksi konflik tetap diuji dengan DB sungguhan;
 alur "model menjawab sukses" diverifikasi memakai respons model palsu yang realistis, dan
-secara manual sekali dengan model sungguhan (lihat laporan task). Test end-to-end (lewat
-HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
+secara manual sekali dengan model sungguhan (lihat laporan task).
+
+`tests/integration/auth.test.ts` menguji login/logout/session (termasuk rate limit dan
+pencabutan sesi saat nonaktifkan akun), serta kebijakan RBAC Task 6 (admin/
+document_controller bypass `document_access` untuk manajemen dokumen; engineer/viewer
+tidak — IDOR dicegah lewat `404`). Semua diuji pada level usecase dengan DB sungguhan; test
+end-to-end lewat HTTP (`fetch` ke route yang berjalan) belum ada — divalidasi secara manual
+lewat `curl` sebagai gantinya (lihat bagian "Autentikasi dan otorisasi" di atas).
 
 ## Troubleshooting
 
@@ -315,8 +366,17 @@ HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
   stabil terbaru (`0.31.x`) masih membawa dependency `@esbuild-kit/esm-loader` yang usang.
   Tidak ada rilis stabil upstream yang memperbaikinya tanpa downgrade besar saat ini —
   dipantau untuk rilis berikutnya, bukan risiko di runtime production.
-- **Upload mengembalikan `401`**: header `x-user-id` belum diisi, atau bukan UUID valid.
-  Jalankan `npm run seed:dev-user` dan pakai id yang dicetak.
+- **Upload/chat/admin mengembalikan `401`**: belum login, atau cookie sesi sudah
+  kedaluwarsa/dicabut (logout, atau akun dinonaktifkan). Login lagi lewat
+  `POST /api/v1/auth/login` (lihat "Autentikasi dan otorisasi") dan pastikan `-b
+cookies.txt` disertakan di permintaan berikutnya.
+- **Upload/reprocess mengembalikan `403`**: akun yang sedang login tidak punya role
+  `admin`/`document_controller`. Cek/ubah role lewat `PATCH /api/v1/admin/users/:id`
+  (perlu login sebagai `admin`) atau pakai akun `seed:dev-user` (role `admin` default).
+- **Login mengembalikan `429`**: terlalu banyak percobaan login gagal untuk email yang
+  sama dalam jendela waktu tertentu (default 10x/15 menit). Tunggu sesuai header
+  `Retry-After`, atau ubah `LOGIN_RATE_LIMIT_MAX_ATTEMPTS`/`_WINDOW_MS` di `.env.local`
+  untuk testing lokal.
 - **Upload mengembalikan `422 "File tidak dapat dibaca sebagai PDF yang valid"`**: file
   bukan PDF yang bisa di-parse (bukan sekadar cek ekstensi) — PDF.js gagal membuka
   strukturnya. Pastikan file benar-benar PDF teks, bukan hasil scan yang rusak.
@@ -343,10 +403,16 @@ HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
 
 ## Keterbatasan saat ini
 
-- Belum ada autentikasi sungguhan (Task 6). Endpoint chat/dokumen memakai header
-  `x-user-id` sebagai placeholder sementara (lihat
-  `src/server/controllers/_temporary-actor.ts`) — **bukan kontrol keamanan**, siapa pun
-  yang tahu sebuah user id bisa memakainya.
+- **MFA belum diimplementasikan** untuk akun `admin` — PLANNING.md §10 menyebutnya
+  "jika didukung dan diwajibkan"; tidak ada persyaratan eksplisit untuk prototype ini,
+  jadi ditunda sampai ada kebutuhan nyata.
+- **Rate limiting bersifat in-memory per-proses** (`src/lib/auth/rate-limit.ts`) — reset
+  saat restart dan tidak terkoordinasi lintas instance. Deployment multi-instance
+  sungguhan butuh store bersama (mis. Redis), bukan solusi prototype ini.
+- **CSRF**: tidak ada token CSRF terpisah. Mitigasi mengandalkan cookie sesi
+  `SameSite=Lax` (tidak terkirim pada request cross-site, termasuk upload
+  `multipart/form-data`) — cukup untuk prototype, tapi bukan pengganti token CSRF untuk
+  kasus yang butuh dukungan browser lama atau subdomain yang tidak dipercaya.
 - Belum ada endpoint `PATCH /api/v1/documents/:id` (ubah status/metadata) atau
   `GET /api/v1/documents/:id/pages/:page` (preview satu halaman) — keduanya ada di rencana
   PLANNING.md §12 tapi di luar scope literal Task 3.
@@ -360,8 +426,6 @@ HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
 - Model akses retrieval baru menerapkan pencocokan role (`document_access.role_id`); kolom
   `project_id`/`site_id` pada `document_access` belum dipakai sebagai pembatas tambahan
   karena belum ada tabel penugasan user↔proyek/cabang (PLANNING.md §18 keputusan 12).
-- Tidak ada special-case "admin selalu boleh akses semua dokumen" — kebijakan RBAC final
-  (termasuk peran mana yang bypass `document_access`) menunggu Task 6.
 - Deteksi konflik hanya mencakup rantai `supersedes_document_id` yang eksplisit ada di DB,
   atau yang dikenali model dari isi chunk itu sendiri — bukan deteksi kontradiksi semantik
   yang menyeluruh (sesuai PLANNING.md #9: "sistem tidak boleh mengklaim telah mendeteksi
@@ -369,7 +433,6 @@ HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
 - Field `warning` di contoh kontrak PLANNING.md #8 tidak disimpan sebagai kolom terpisah —
   `messages` tidak punya kolom untuk itu, jadi penjelasan konflik/downgrade digabung ke
   dalam teks `answer`/`content` itu sendiri.
-- Tidak ada rate limiting atau audit log untuk chat (ditunda ke Task 6, sesuai rencana).
 - Provider chat eksternal (`CHAT_PROVIDER=gemini/openai/anthropic`) belum pernah diuji
   dengan API key sungguhan — hanya mocked unit test + satu request nyata dengan key palsu
   (lihat bagian "Chat RAG" di atas). Fitur ini juga merupakan pengecualian eksplisit

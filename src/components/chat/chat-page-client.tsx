@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDevUser } from "@/components/dev-user-provider";
 import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
 import { MessageBubble } from "./message-bubble";
 import type { ChatMessageView, ConversationSummary } from "./types";
@@ -18,7 +17,6 @@ interface ConversationDetailResponse {
 }
 
 export function ChatPageClient() {
-  const { userId } = useDevUser();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
@@ -28,15 +26,14 @@ export function ChatPageClient() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
-    if (!userId) return;
     try {
-      const res = await apiFetch(userId, "/api/v1/conversations");
+      const res = await apiFetch("/api/v1/conversations");
       const data = await parseJsonOrThrow<{ items: ConversationSummary[] }>(res);
       setConversations(data.items);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal memuat daftar percakapan.");
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     // Standard fetch-on-mount — setState inside loadConversations only runs after its
@@ -50,10 +47,9 @@ export function ChatPageClient() {
   }, [messages]);
 
   async function openConversation(id: string) {
-    if (!userId) return;
     setError(null);
     try {
-      const res = await apiFetch(userId, `/api/v1/conversations/${id}`);
+      const res = await apiFetch(`/api/v1/conversations/${id}`);
       const data = await parseJsonOrThrow<ConversationDetailResponse>(res);
       setConversationId(id);
       setMessages(data.messages);
@@ -70,9 +66,8 @@ export function ChatPageClient() {
 
   async function deleteConversation(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!userId) return;
     try {
-      await apiFetch(userId, `/api/v1/conversations/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/v1/conversations/${id}`, { method: "DELETE" });
       if (conversationId === id) {
         startNewConversation();
       }
@@ -85,7 +80,7 @@ export function ChatPageClient() {
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || !userId || sending) return;
+    if (!text || sending) return;
 
     setError(null);
     setSending(true);
@@ -101,7 +96,7 @@ export function ChatPageClient() {
     setInput("");
 
     try {
-      const res = await apiFetch(userId, "/api/v1/chat", {
+      const res = await apiFetch("/api/v1/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ conversationId: conversationId ?? undefined, message: text }),
@@ -116,14 +111,6 @@ export function ChatPageClient() {
     } finally {
       setSending(false);
     }
-  }
-
-  if (!userId) {
-    return (
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Atur User ID (dev) di bagian atas halaman terlebih dahulu untuk mulai chat.
-      </p>
-    );
   }
 
   return (
