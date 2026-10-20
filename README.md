@@ -65,6 +65,25 @@ Buka [http://localhost:3000](http://localhost:3000). Cek kesehatan aplikasi + da
 ketersediaan model embedding lokal di
 [http://localhost:3000/api/v1/health/ai](http://localhost:3000/api/v1/health/ai).
 
+### Antarmuka web (UI minimal)
+
+Selain endpoint API di atas, ada UI minimal untuk memudahkan demo/manual testing tanpa
+`curl`:
+
+- `/` — halaman beranda dengan tautan ke Chat dan Dokumen.
+- `/documents` — unggah dokumen baru (form) dan lihat daftar dokumen yang sudah diunggah.
+- `/chat` — sidebar percakapan (buat baru/pilih/hapus) + thread chat, menampilkan status
+  jawaban (`answered` / `insufficient_evidence` / `conflict_detected`) dan sumber kutipan
+  per pesan.
+
+Karena autentikasi sungguhan belum ada (Task 6), UI memakai mekanisme sementara **"Mode
+dev"**: bar di bagian atas setiap halaman meminta sebuah User ID yang disimpan di
+`localStorage` browser, lalu dikirim sebagai header `x-user-id` di setiap request —
+mekanisme yang persis sama dengan `x-user-id` di endpoint API, hanya dibungkus UI. Isi
+dengan id hasil `npm run seed:dev-user` (lihat bawah) untuk mulai mengunggah dokumen atau
+chat dari browser. Ini bukan kontrol keamanan — siapa pun yang tahu sebuah user id bisa
+memakainya — dan akan digantikan oleh login sungguhan di Task 6.
+
 ### Mengunggah dokumen (Task 3)
 
 Belum ada autentikasi (Task 6), jadi setiap request ke `/api/v1/documents` sementara
