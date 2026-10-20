@@ -16,6 +16,28 @@ const baseEnvSchema = z.object({
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   EMBEDDING_MODEL: z.string().min(1).default("nomic-embed-text"),
   OLLAMA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  CHAT_MODEL: z.string().min(1).default("qwen2.5:3b-instruct"),
+  // CPU-only inference is slow (no GPU assumed for dev). Measured ~12 minutes for a
+  // short answer on this project's dev sandbox — the default is set well above that.
+  // Real deployments need GPU hardware for acceptable chat latency (PLANNING.md #18
+  // decision 6); this default exists so the dev experience doesn't time out, not as a
+  // production SLA.
+  OLLAMA_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
+  CHAT_RETRIEVAL_LIMIT: z.coerce.number().int().positive().default(6),
+
+  // OPT-IN exception to "no external AI" (PLANNING.md "Mode Chat Eksternal"), default
+  // stays "local" so nothing changes unless explicitly configured. When set to a cloud
+  // provider, the user's question + retrieved document chunk text are sent to that
+  // provider's API — dev/demo convenience only, never for real company documents until
+  // company policy approves it (PLANNING.md #18 decision 1).
+  CHAT_PROVIDER: z.enum(["local", "gemini", "openai", "anthropic"]).default("local"),
+  EXTERNAL_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).default("gemini-flash-lite-latest"),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
 });
 
 export type Env = {
@@ -31,6 +53,17 @@ export type Env = {
   OLLAMA_BASE_URL: string;
   EMBEDDING_MODEL: string;
   OLLAMA_REQUEST_TIMEOUT_MS: number;
+  CHAT_MODEL: string;
+  OLLAMA_CHAT_TIMEOUT_MS: number;
+  CHAT_RETRIEVAL_LIMIT: number;
+  CHAT_PROVIDER: "local" | "gemini" | "openai" | "anthropic";
+  EXTERNAL_CHAT_TIMEOUT_MS: number;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL: string;
+  ANTHROPIC_API_KEY?: string;
+  ANTHROPIC_MODEL: string;
 };
 
 function loadEnv(): Env {
@@ -47,6 +80,17 @@ function loadEnv(): Env {
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
     OLLAMA_REQUEST_TIMEOUT_MS: process.env.OLLAMA_REQUEST_TIMEOUT_MS,
+    CHAT_MODEL: process.env.CHAT_MODEL,
+    OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
+    CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
+    CHAT_PROVIDER: process.env.CHAT_PROVIDER,
+    EXTERNAL_CHAT_TIMEOUT_MS: process.env.EXTERNAL_CHAT_TIMEOUT_MS,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_MODEL: process.env.OPENAI_MODEL,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
   });
 
   if (!parsed.success) {
@@ -62,6 +106,19 @@ function loadEnv(): Env {
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL wajib diisi untuk NODE_ENV=production.");
+  }
+
+  const requiredKeyByProvider: Record<string, { key: string | undefined; envVar: string }> = {
+    gemini: { key: data.GEMINI_API_KEY, envVar: "GEMINI_API_KEY" },
+    openai: { key: data.OPENAI_API_KEY, envVar: "OPENAI_API_KEY" },
+    anthropic: { key: data.ANTHROPIC_API_KEY, envVar: "ANTHROPIC_API_KEY" },
+  };
+  const requiredKey = requiredKeyByProvider[data.CHAT_PROVIDER];
+  if (requiredKey && !requiredKey.key) {
+    throw new Error(
+      `${requiredKey.envVar} wajib diisi jika CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
+        "CHAT_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
+    );
   }
 
   return { ...data, DATABASE_URL: databaseUrl };

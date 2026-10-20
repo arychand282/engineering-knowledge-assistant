@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import type { ListDocumentsQuery } from "@/server/dto/documents.dto";
@@ -19,6 +19,13 @@ export async function findDocumentById(id: string): Promise<DocumentRow | null> 
 export async function findDocumentBySha256(sha256: string): Promise<DocumentRow | null> {
   const [row] = await db.select().from(documents).where(eq(documents.sha256, sha256));
   return row ?? null;
+}
+
+export async function findDocumentsByIds(ids: string[]): Promise<DocumentRow[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  return db.select().from(documents).where(inArray(documents.id, ids));
 }
 
 export interface ListDocumentsResult {

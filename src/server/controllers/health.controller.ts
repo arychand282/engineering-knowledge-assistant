@@ -11,7 +11,12 @@ export async function getHealth() {
 
 export async function getAiHealth() {
   const report = await checkAiHealth();
-  const isHealthy = report.reachable && report.hasEmbeddingModel;
+  // Embeddings always run on Ollama regardless of CHAT_PROVIDER. The chat model only
+  // needs to be present on Ollama when chat itself is configured to run there too.
+  const isHealthy =
+    report.reachable &&
+    report.hasEmbeddingModel &&
+    (report.chatProvider !== "local" || report.hasChatModel);
 
   return NextResponse.json(report, { status: isHealthy ? 200 : 503 });
 }

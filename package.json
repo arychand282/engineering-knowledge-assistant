@@ -19,7 +19,8 @@
     "db:down": "docker compose down",
     "ai:up": "docker compose up -d ollama",
     "ai:down": "docker compose stop ollama",
-    "ai:pull-embedding-model": "tsx scripts/pull-embedding-model.ts",
+    "ai:pull-embedding-model": "tsx scripts/pull-model.ts",
+    "ai:pull-chat-model": "tsx scripts/pull-model.ts qwen2.5:3b-instruct",
     "seed:dev-user": "tsx scripts/seed-dev-user.ts"
   },
   "dependencies": {

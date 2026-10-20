@@ -5,6 +5,7 @@ import {
   OllamaUnavailableError,
   checkOllamaHealth,
   embedTexts,
+  generateChatCompletion,
 } from "@/lib/ai/ollama-client";
 
 function jsonResponse(body: unknown, init: { status?: number } = {}) {
@@ -57,26 +58,77 @@ describe("embedTexts", () => {
   });
 });
 
+describe("generateChatCompletion", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the message content on success", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ message: { role: "assistant", content: '{"status":"answered"}' } }),
+        ),
+    );
+
+    await expect(generateChatCompletion([{ role: "user", content: "hi" }])).resolves.toBe(
+      '{"status":"answered"}',
+    );
+  });
+
+  it("throws OllamaUnavailableError on a non-OK HTTP response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, { status: 500 })));
+
+    await expect(generateChatCompletion([{ role: "user", content: "hi" }])).rejects.toBeInstanceOf(
+      OllamaUnavailableError,
+    );
+  });
+
+  it("throws OllamaUnavailableError when the response has no message content", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: {} })));
+
+    await expect(generateChatCompletion([{ role: "user", content: "hi" }])).rejects.toBeInstanceOf(
+      OllamaUnavailableError,
+    );
+  });
+
+  it("throws OllamaUnavailableError when fetch itself fails (network/timeout)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("fetch failed")));
+
+    await expect(generateChatCompletion([{ role: "user", content: "hi" }])).rejects.toBeInstanceOf(
+      OllamaUnavailableError,
+    );
+  });
+});
+
 describe("checkOllamaHealth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("reports reachable + hasEmbeddingModel when the model is listed", async () => {
+  it("reports reachable + hasEmbeddingModel + hasChatModel when both models are listed", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(jsonResponse({ models: [{ model: `${env.EMBEDDING_MODEL}:latest` }] })),
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          models: [
+            { model: `${env.EMBEDDING_MODEL}:latest` },
+            { model: `${env.CHAT_MODEL}:latest` },
+          ],
+        }),
+      ),
     );
 
     await expect(checkOllamaHealth()).resolves.toEqual({
       reachable: true,
       hasEmbeddingModel: true,
+      hasChatModel: true,
     });
   });
 
-  it("reports reachable but not hasEmbeddingModel when the model is missing", async () => {
+  it("reports reachable but not hasEmbeddingModel/hasChatModel when neither model is listed", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ models: [{ model: "some-other-model" }] })),
@@ -85,6 +137,7 @@ describe("checkOllamaHealth", () => {
     await expect(checkOllamaHealth()).resolves.toEqual({
       reachable: true,
       hasEmbeddingModel: false,
+      hasChatModel: false,
     });
   });
 
@@ -94,6 +147,7 @@ describe("checkOllamaHealth", () => {
     await expect(checkOllamaHealth()).resolves.toEqual({
       reachable: false,
       hasEmbeddingModel: false,
+      hasChatModel: false,
     });
   });
 });

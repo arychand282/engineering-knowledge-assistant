@@ -3,9 +3,9 @@
 Aplikasi pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. Lihat
 `PLANNING.md` untuk rencana kerja lengkap, batasan keamanan, dan roadmap tahapan.
 
-> **Status saat ini:** Task 1 (fondasi aplikasi), Task 2 (fondasi database), Task 3
-> (document ingestion), dan Task 4 (local embeddings and retrieval) selesai. Belum ada
-> chat RAG atau autentikasi sungguhan — tahap tersebut menyusul di task berikutnya.
+> **Status saat ini:** Task 1–5 selesai (fondasi aplikasi, database, document ingestion,
+> local embeddings & retrieval, dan chat RAG lokal). Belum ada autentikasi sungguhan —
+> Task 6 menyusul.
 
 ## Stack
 
@@ -14,13 +14,16 @@ Aplikasi pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. L
 - PostgreSQL + pgvector (via Docker Compose) dengan Drizzle ORM
 - `pdfjs-dist` untuk ekstraksi teks PDF per halaman (lokal, tanpa OCR/AI eksternal)
 - Ollama (via Docker Compose) untuk embedding lokal — model dev default `nomic-embed-text`
+- Ollama untuk chat lokal — model dev default `qwen2.5:3b-instruct`
 - ESLint + Prettier
 - Vitest (unit dan integration test runner)
 - Zod (validasi environment dan, nantinya, validasi API)
 
 Sesuai `PLANNING.md`, aplikasi ini **tidak** mengirim dokumen atau prompt ke API AI
-eksternal, layanan embedding cloud, atau layanan OCR cloud. Model AI dan embedding berjalan
-sepenuhnya lokal lewat Ollama.
+eksternal, layanan embedding cloud, atau layanan OCR cloud — kecuali satu pengecualian
+opsional dan eksplisit (`CHAT_PROVIDER`, default tetap `local`) untuk demo di laptop tanpa
+GPU; lihat bagian "Chat RAG" di bawah. Embedding dan retrieval **selalu** lokal, tanpa
+kecuali, apa pun nilai `CHAT_PROVIDER`.
 
 Endpoint API berada di bawah `/api/v1/...` dan mengikuti pemisahan layer
 `route.ts` (thin HTTP binding) → `src/server/controllers` → `src/server/usecases` →
@@ -39,15 +42,17 @@ npm install
 cp .env.example .env.local
 npm run db:up                   # start PostgreSQL + pgvector via Docker Compose
 npm run db:migrate               # apply Drizzle migrations
-npm run ai:up                    # start Ollama (local embedding runtime) via Docker Compose
+npm run ai:up                    # start Ollama (local embedding + chat runtime) via Docker Compose
 npm run ai:pull-embedding-model   # pull EMBEDDING_MODEL (default: nomic-embed-text, ~274MB)
+npm run ai:pull-chat-model        # pull CHAT_MODEL (default: qwen2.5:3b-instruct, ~1.9GB)
 ```
 
 Lihat `.env.example` untuk variabel environment yang tersedia. Pasangan
-`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` (`nomic-embed-text` / 768) bersifat PROVISIONAL —
-default dev, bukan keputusan model final (butuh benchmark bahasa Indonesia + persetujuan
-lisensi, lihat PLANNING.md #3/#18). Mengubah salah satunya setelah ada data membutuhkan
-migration baru dan re-embedding seluruh `document_chunks`.
+`EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` (`nomic-embed-text` / 768) dan `CHAT_MODEL`
+(`qwen2.5:3b-instruct`) bersifat PROVISIONAL — default dev, bukan keputusan model final
+(butuh benchmark bahasa Indonesia + persetujuan lisensi, lihat PLANNING.md #3/#18).
+Mengubah `EMBEDDING_MODEL`/`EMBEDDING_DIMENSIONS` setelah ada data membutuhkan migration
+baru dan re-embedding seluruh `document_chunks`.
 
 ## Menjalankan aplikasi
 
@@ -93,19 +98,128 @@ tidak berpura-pura berhasil melakukan embedding.
 
 ### Pencarian dokumen (Task 4)
 
-Belum ada endpoint HTTP untuk pencarian — `searchDocuments` (di
-`src/server/usecases/retrieval/search-documents.usecase.ts`) adalah fungsi internal yang
-akan dipakai langsung oleh chat usecase di Task 5. Alurnya: filter akses dokumen
-berdasarkan `document_access`/role pengguna **sebelum** query apa pun dijalankan, lalu
-gabungkan hasil full-text search (PostgreSQL, config `simple`) dan vector search
-(pgvector, cosine similarity) dengan Reciprocal Rank Fusion. Lihat
-`tests/integration/retrieval.test.ts` untuk contoh pemakaian nyata (termasuk kasus akses
-ditolak).
+`searchDocuments` (di `src/server/usecases/retrieval/search-documents.usecase.ts`) belum
+punya endpoint HTTP sendiri — dipakai langsung oleh chat usecase (Task 5). Alurnya: filter
+akses dokumen berdasarkan `document_access`/role pengguna **sebelum** query apa pun
+dijalankan, lalu gabungkan hasil full-text search (PostgreSQL, config `simple`, OR antar
+kata — lihat `buildOrTsQuery`) dan vector search (pgvector, cosine similarity) dengan
+Reciprocal Rank Fusion. Lihat `tests/integration/retrieval.test.ts` untuk contoh pemakaian
+nyata (termasuk kasus akses ditolak).
 
 **Model akses saat ini (sementara, menunggu kebijakan RBAC final di Task 6):**
 dokumen hanya terlihat jika ada baris `document_access` yang mengizinkan salah satu role
 milik pengguna — _default-deny_. Kolom `project_id`/`site_id` pada `document_access` belum
-diterapkan sebagai pembatas tambahan (belum ada tabel penugasan user↔proyek/cabang).
+diterapkan sebagai pembatas tambahan (belum ada tabel penugasan user↔proyek/cabang). Belum
+ada mode "semua user boleh baca semua dokumen" — lihat PLANNING.md §18 keputusan 4 untuk
+opsi desainnya jika klien memintanya nanti.
+
+### Chat RAG (Task 5)
+
+```bash
+curl -X POST http://localhost:3000/api/v1/chat \
+  -H "x-user-id: <user id>" \
+  -H "content-type: application/json" \
+  -d '{"message": "Siapa yang wajib memeriksa tekanan boiler setiap hari?"}'
+```
+
+`conversationId` pada body bersifat opsional — tanpa itu, percakapan baru otomatis
+dibuat. Endpoint lain: `GET /api/v1/conversations` (daftar percakapan milik pengguna),
+`GET /api/v1/conversations/:id` (riwayat + sumber tiap jawaban), `DELETE
+/api/v1/conversations/:id` (hapus). Ketiganya menolak percakapan milik user lain dengan
+`404` (bukan `403`, agar tidak membocorkan keberadaan resource — mencegah IDOR).
+
+Alur `askQuestion` (`src/server/usecases/chat/ask-question.usecase.ts`) mengikuti urutan
+di PLANNING.md §8: retrieval dengan filter akses dulu → jika tidak ada bukti sama sekali,
+`insufficient_evidence` **tanpa** memanggil model → jika ditemukan dokumen yang saling
+mensupersede di antara kandidat (`documents.supersedes_document_id`), `conflict_detected`
+**tanpa** memanggil model (ini sinyal pasti dari backend, bukan tebakan model) → baru
+kalau lolos keduanya, model lokal dipanggil dengan `format` JSON Schema terstruktur, dan
+setiap `source_chunk_ids` yang dikembalikan divalidasi ulang terhadap kandidat retrieval
+sesungguhnya — kutipan yang tidak valid diturunkan statusnya ke `insufficient_evidence`,
+bukan ditampilkan seadanya. Backend juga menolak `status="conflict_detected"` dari model
+jika sumber yang divalidasi hanya berasal dari satu dokumen (konflik butuh ≥2 dokumen
+berbeda) — diturunkan ke `answered`/`insufficient_evidence` sesuai ada/tidaknya sumber
+valid, bukan dipercaya mentah-mentah dari model.
+
+**Temuan nyata saat pengujian manual (bukan dugaan):** `qwen2.5:3b-instruct` dites 2x
+dengan pertanyaan dan konteks yang identik (satu dokumen, satu chunk, jawaban jelas ada).
+Isi jawabannya BENAR kedua kali ("Tim Keselamatan"), tapi `status` yang dikembalikan model
+berbeda setiap kali: pertama `conflict_detected` (keliru — diturunkan backend ke
+`answered`, lihat validasi di atas), kedua `insufficient_evidence` (model sendiri yang
+menyatakan ini, langsung dari model, bukan hasil override backend) walau tetap memberi
+jawaban singkat yang benar. Backend sengaja tidak menambah heuristik lagi untuk menebak
+"status mana yang benar" di luar dua validasi struktural di atas (konflik butuh ≥2
+dokumen, sumber harus valid) — ini murni ketidakkonsistenan model kecil ini, dan
+mengarah ke sisi yang lebih aman (meragukan diri sendiri), bukan ke sisi yang berbahaya
+(percaya diri pada jawaban salah). Ini bukti nyata mengapa PLANNING.md menandai pemilihan
+model sebagai keputusan yang masih perlu benchmark SME, bukan sesuatu yang bisa
+"diperbaiki" dengan lebih banyak kode di Task 5.
+
+**Latensi chat lokal CPU-only itu nyata dan lambat.** Pada sandbox dev proyek ini, satu
+jawaban singkat dari `qwen2.5:3b-instruct` butuh **~12 menit** (943% CPU, tanpa GPU). Model
+yang lebih kecil (`qwen2.5:1.5b-instruct`, diuji tapi tidak dipakai) ~40x lebih cepat tapi
+salah bahasa (balas Inggris) dan salah kutipan — akurasi sitasi lebih penting daripada
+kecepatan untuk aplikasi ini, jadi model kecil ditolak. `OLLAMA_CHAT_TIMEOUT_MS` default
+900000 (15 menit) mengakomodasi ini; hardware GPU wajib untuk latensi yang layak produksi
+(PLANNING.md §18 keputusan 6).
+
+#### Mode demo tanpa GPU: provider chat eksternal (opsional)
+
+Kalau laptop kamu tidak punya GPU dan ~12 menit per jawaban terlalu lama untuk demo, set
+`CHAT_PROVIDER` di `.env.local` ke `gemini`, `openai`, atau `anthropic` (default tetap
+`local`). **Ini pengecualian eksplisit terhadap aturan "tanpa AI eksternal" di
+`PLANNING.md`** — hanya untuk demo/dev dengan data non-rahasia, dibahas dan disetujui
+sebagai permintaan eksplisit (lihat PLANNING.md bagian 8 "Mode Chat Eksternal" untuk
+aturan lengkapnya). **Jangan dipakai dengan dokumen perusahaan sungguhan.**
+
+```bash
+# .env.local
+CHAT_PROVIDER=gemini          # atau: openai, anthropic
+GEMINI_API_KEY=isi-key-kamu    # hanya wajib untuk provider yang dipilih
+```
+
+| `CHAT_PROVIDER`   | Env var key wajib   | Model default                    | Biaya                         |
+| ----------------- | ------------------- | -------------------------------- | ----------------------------- |
+| `local` (default) | —                   | `qwen2.5:3b-instruct` via Ollama | Gratis, tapi lambat tanpa GPU |
+| `gemini`          | `GEMINI_API_KEY`    | `gemini-flash-lite-latest`       | Ada free tier                 |
+| `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                    | Berbayar sejak token pertama  |
+| `anthropic`       | `ANTHROPIC_API_KEY` | `claude-haiku-4-5-20251001`      | Berbayar sejak token pertama  |
+
+Aplikasi **menolak start** dengan pesan error jelas kalau `CHAT_PROVIDER` diisi tapi API
+key yang sesuai kosong — tidak pernah diam-diam gagal. `GET /api/v1/health/ai`
+menampilkan `chatProvider` yang sedang aktif. Saat provider eksternal aktif, server log
+mencetak peringatan sekali di awal (nama provider + apa yang dikirim keluar). Embedding
+dan retrieval **tidak pernah** memakai provider eksternal ini — hanya langkah generasi
+jawaban chat.
+
+**Status verifikasi per provider:**
+
+- **Gemini — diuji end-to-end dengan API key sungguhan, berhasil.** Dua bug nyata
+  ditemukan dan diperbaiki selama pengujian ini (bukan dugaan):
+  1. Endpoint `generateContent` (non-streaming) **hang tanpa respons sama sekali**
+     (timeout, 0 byte diterima) dari jaringan tempat pengujian ini dijalankan — baik lewat
+     `curl` maupun `fetch` Node asli. Endpoint `streamGenerateContent` (SSE) untuk model
+     yang sama bekerja normal. `gemini-client.ts` sekarang memakai endpoint streaming dan
+     menggabungkan kembali potongan teksnya — tidak butuh streaming sungguhan ke
+     frontend, hanya butuh endpoint yang responsif.
+  2. Mengandalkan instruksi prompt saja (tanpa `responseSchema`) membuat Gemini
+     mengarang nama field sendiri (`claim` padahal seharusnya `text`) dan nilai status
+     sendiri (`"success"` padahal seharusnya `"answered"`) — isi jawabannya BENAR, tapi
+     bentuk JSON-nya gagal validasi Zod setiap kali. Menambahkan `responseSchema`
+     (`llmAnswerGeminiSchema` di `answer-schema.ts`, dialek Gemini: tipe huruf besar)
+     memperbaikinya sepenuhnya — diverifikasi lagi dengan panggilan nyata.
+  3. Model default juga diperbarui: `gemini-1.5-flash` sudah pensiun per Oktober 2026
+     (`404 NOT_FOUND`). Diganti ke alias `gemini-flash-lite-latest` (tidak akan basi lagi,
+     otomatis mengikuti model flash-lite terbaru Google) — diverifikasi dengan panggilan
+     nyata juga.
+- **OpenAI, Anthropic — belum diuji dengan API key sungguhan** (tidak ada key tersedia
+  untuk keduanya). Hanya unit test mocked (bentuk request, auth header, parsing respons).
+  Risiko yang SAMA seperti temuan Gemini di atas (field JSON tidak sesuai schema) mungkin
+  juga terjadi di provider ini karena keduanya juga hanya mengandalkan instruksi prompt,
+  bukan skema ketat — OpenAI punya mode `response_format: json_schema` (strict) yang lebih
+  ketat tapi belum diterapkan karena belum bisa diverifikasi tanpa key sungguhan. Kalau
+  kamu test salah satu dengan key asli dan responsnya gagal validasi Zod (bukan error
+  koneksi), ini kemungkinan besar penyebabnya — lihat `src/lib/ai/providers/`.
 
 ## Build produksi (smoke test)
 
@@ -143,6 +257,7 @@ untuk pencarian hybrid di Task 4.
 npm run ai:up                    # start container Ollama
 npm run ai:down                  # stop container (model yang sudah di-pull tetap ada)
 npm run ai:pull-embedding-model   # pull model sesuai EMBEDDING_MODEL
+npm run ai:pull-chat-model        # pull model sesuai CHAT_MODEL (default qwen2.5:3b-instruct)
 ```
 
 ## Test
@@ -150,14 +265,19 @@ npm run ai:pull-embedding-model   # pull model sesuai EMBEDDING_MODEL
 ```bash
 npm test                # unit test (tidak butuh database/Ollama)
 npm run test:watch
-npm run test:integration  # butuh db:up + db:migrate + ai:up + ai:pull-embedding-model
+npm run test:integration  # butuh db:up + db:migrate + ai:up + kedua model di-pull
 ```
 
-Test unit berada di `tests/unit/` (client Ollama dan merge hasil di-mock, tidak butuh
-infrastruktur apa pun). Test integration di `tests/integration/` berjalan terhadap
-PostgreSQL **dan** Ollama sungguhan — termasuk `retrieval.test.ts` yang memverifikasi
-relevansi hasil pencarian dan bahwa tidak ada kebocoran dokumen lintas role/user. Test
-end-to-end (lewat HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
+Test unit berada di `tests/unit/` (client Ollama — termasuk `generateChatCompletion` — dan
+fungsi retrieval murni di-mock, tidak butuh infrastruktur apa pun). Test integration di
+`tests/integration/` berjalan terhadap PostgreSQL **dan** Ollama embedding sungguhan;
+hanya pemanggilan model **chat** (`generateChatCompletion`) yang di-mock di
+`ask-question.test.ts` — karena satu panggilan chat sungguhan butuh menit, bukan detik
+(lihat bagian "Chat RAG" di atas), jadi tidak layak dijalankan berulang di test suite
+otomatis. Jalur retrieval, akses, dan deteksi konflik tetap diuji dengan DB sungguhan;
+alur "model menjawab sukses" diverifikasi memakai respons model palsu yang realistis, dan
+secara manual sekali dengan model sungguhan (lihat laporan task). Test end-to-end (lewat
+HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
 
 ## Troubleshooting
 
@@ -189,14 +309,25 @@ end-to-end (lewat HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
 - **`npm run test:integration` lambat atau gagal di `retrieval.test.ts`**: pastikan
   `npm run ai:up` dan `npm run ai:pull-embedding-model` sudah dijalankan — test ini
   memanggil Ollama sungguhan, bukan mock.
+- **`POST /api/v1/chat` lambat sekali / tampak macet**: diharapkan. Lihat bagian "Chat RAG"
+  di atas — CPU-only inference untuk `qwen2.5:3b-instruct` bisa butuh menit, bukan detik.
+  Jalur `insufficient_evidence` dan `conflict_detected` tidak memanggil model sama sekali
+  jadi tetap cepat; hanya jalur `answered`/`error` yang menunggu model.
+- **`POST /api/v1/chat` mengembalikan `answerStatus: "error"`**: model chat lokal tidak
+  terjangkau atau mengembalikan respons yang tidak sesuai schema. Cek `npm run ai:up` dan
+  bahwa `CHAT_MODEL` sudah di-pull (`npm run ai:pull-chat-model`); detail error ada di log
+  server (`console.error`), tidak dibocorkan ke response. Kalau `CHAT_PROVIDER` diisi
+  eksternal, cek API key-nya, bukan Ollama.
+- **Aplikasi gagal start dengan error `"..._API_KEY wajib diisi jika CHAT_PROVIDER=..."`**:
+  `CHAT_PROVIDER` diisi ke provider eksternal tapi API key-nya kosong di `.env.local`. Isi
+  key-nya, atau kembalikan `CHAT_PROVIDER=local` (atau hapus barisnya) kalau tidak sengaja.
 
 ## Keterbatasan saat ini
 
-- Belum ada chat RAG (Task 5) — `searchDocuments` sudah berfungsi tapi belum dipanggil
-  dari endpoint chat mana pun.
-- Belum ada autentikasi sungguhan (Task 6). Endpoint dokumen memakai header `x-user-id`
-  sebagai placeholder sementara (lihat `src/server/controllers/_temporary-actor.ts`) —
-  **bukan kontrol keamanan**, siapa pun yang tahu sebuah user id bisa memakainya.
+- Belum ada autentikasi sungguhan (Task 6). Endpoint chat/dokumen memakai header
+  `x-user-id` sebagai placeholder sementara (lihat
+  `src/server/controllers/_temporary-actor.ts`) — **bukan kontrol keamanan**, siapa pun
+  yang tahu sebuah user id bisa memakainya.
 - Belum ada endpoint `PATCH /api/v1/documents/:id` (ubah status/metadata) atau
   `GET /api/v1/documents/:id/pages/:page` (preview satu halaman) — keduanya ada di rencana
   PLANNING.md §12 tapi di luar scope literal Task 3.
@@ -204,11 +335,25 @@ end-to-end (lewat HTTP) akan ditambahkan pada task autentikasi dan evaluasi.
   operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
 - Chunking memakai perkiraan jumlah kata sebagai proksi token (bukan tokenizer LLM
   sungguhan) dan belum mendeteksi heading/tabel/daftar bernomor secara khusus.
-- Model embedding (`nomic-embed-text`, 768 dimensi) adalah default dev, bukan keputusan
-  final — belum melalui benchmark bahasa Indonesia atau persetujuan lisensi formal.
+- Model embedding (`nomic-embed-text`, 768 dimensi) dan model chat (`qwen2.5:3b-instruct`)
+  adalah default dev, bukan keputusan final — belum melalui benchmark bahasa Indonesia
+  atau persetujuan lisensi formal.
 - Model akses retrieval baru menerapkan pencocokan role (`document_access.role_id`); kolom
   `project_id`/`site_id` pada `document_access` belum dipakai sebagai pembatas tambahan
   karena belum ada tabel penugasan user↔proyek/cabang (PLANNING.md §18 keputusan 12).
 - Tidak ada special-case "admin selalu boleh akses semua dokumen" — kebijakan RBAC final
   (termasuk peran mana yang bypass `document_access`) menunggu Task 6.
+- Deteksi konflik hanya mencakup rantai `supersedes_document_id` yang eksplisit ada di DB,
+  atau yang dikenali model dari isi chunk itu sendiri — bukan deteksi kontradiksi semantik
+  yang menyeluruh (sesuai PLANNING.md #9: "sistem tidak boleh mengklaim telah mendeteksi
+  semua konflik").
+- Field `warning` di contoh kontrak PLANNING.md #8 tidak disimpan sebagai kolom terpisah —
+  `messages` tidak punya kolom untuk itu, jadi penjelasan konflik/downgrade digabung ke
+  dalam teks `answer`/`content` itu sendiri.
+- Tidak ada rate limiting atau audit log untuk chat (ditunda ke Task 6, sesuai rencana).
+- Provider chat eksternal (`CHAT_PROVIDER=gemini/openai/anthropic`) belum pernah diuji
+  dengan API key sungguhan — hanya mocked unit test + satu request nyata dengan key palsu
+  (lihat bagian "Chat RAG" di atas). Fitur ini juga merupakan pengecualian eksplisit
+  terhadap batasan "tanpa AI eksternal" PLANNING.md — default tetap `local`, dan jangan
+  dipakai dengan dokumen perusahaan sungguhan sampai ada persetujuan kebijakan formal.
 - Prototype ini belum siap untuk penggunaan produksi atau operasional kritis.

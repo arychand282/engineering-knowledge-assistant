@@ -62,7 +62,7 @@ Membuktikan alur end-to-end berikut:
 - Jangan melakukan fine-tuning pada tahap awal. Mulai dengan model yang sudah dilatih dan pendekatan RAG.
 - Hindari istilah dan aturan domain tertentu yang tertanam di business logic. DAK hanyalah salah satu `document_type`/kategori yang dapat dikonfigurasi, bukan asumsi global aplikasi.
 - Satu instance hanya menyimpan data satu perusahaan. Tetap terapkan autentikasi, role-based access control, dan pembatasan akses berdasarkan cabang/pabrik, departemen, proyek, atau klasifikasi dokumen jika diperlukan. Dokumen tingkat perusahaan dapat diakses lintas cabang sesuai kebijakan akses.
-- Jangan mengirim data perusahaan ke OpenAI API, Anthropic API, Gemini API, layanan embedding cloud, layanan OCR cloud, atau layanan AI pihak ketiga lainnya.
+- Jangan mengirim data perusahaan ke OpenAI API, Anthropic API, Gemini API, layanan embedding cloud, layanan OCR cloud, atau layanan AI pihak ketiga lainnya. **Pengecualian tunggal, opsional, dan eksplisit:** `CHAT_PROVIDER` (default `local`) boleh diisi `gemini`/`openai`/`anthropic` untuk demo/dev di hardware tanpa GPU — lihat bagian 8 "Mode Chat Eksternal" untuk aturan lengkapnya. Embedding dan retrieval tidak pernah terpengaruh pengecualian ini.
 
 ---
 
@@ -79,14 +79,14 @@ Membuktikan alur end-to-end berikut:
 - [x] Mengekstrak teks per halaman untuk menjaga nomor halaman.
 - [x] Membuat embedding secara lokal.
 - [x] Melakukan pencarian semantik dan/atau full-text search.
-- [ ] Menampilkan chat berbahasa Indonesia.
-- [ ] Menampilkan sumber yang berasal dari hasil retrieval, bukan sumber yang dikarang oleh LLM.
-- [ ] Menolak menjawab jika bukti tidak memadai.
-- [ ] Menandai potensi konflik sumber untuk ditinjau manusia.
+- [x] Menampilkan chat berbahasa Indonesia. (API `/api/v1/chat` sudah berfungsi; belum ada UI.)
+- [x] Menampilkan sumber yang berasal dari hasil retrieval, bukan sumber yang dikarang oleh LLM.
+- [x] Menolak menjawab jika bukti tidak memadai.
+- [x] Menandai potensi konflik sumber untuk ditinjau manusia.
 - [ ] Memiliki autentikasi dan kontrol akses dasar.
 - [ ] Memiliki audit log untuk aktivitas penting.
 - [x] Dapat dijalankan di lingkungan development melalui Docker Compose dan instruksi lokal.
-- [ ] Tidak membutuhkan API AI eksternal untuk alur inti.
+- [x] Tidak membutuhkan API AI eksternal untuk alur inti. (Upload → ekstraksi → embedding → retrieval → chat seluruhnya lokal via Ollama, diverifikasi end-to-end pada Task 5.)
 
 ### Kriteria kualitas awal
 
@@ -318,7 +318,13 @@ engineering-knowledge-assistant/
 │   │   ├── retrieval/
 │   │   │   └── merge-results.ts
 │   │   ├── ai/
-│   │   │   ├── ollama-client.ts
+│   │   │   ├── ollama-client.ts (lokal: embedding selalu, chat jika CHAT_PROVIDER=local)
+│   │   │   ├── chat-completion.ts (dispatcher — pilih provider berdasarkan CHAT_PROVIDER)
+│   │   │   ├── providers/
+│   │   │   │   ├── gemini-client.ts
+│   │   │   │   ├── openai-client.ts
+│   │   │   │   ├── anthropic-client.ts
+│   │   │   │   └── errors.ts
 │   │   │   ├── prompts.ts
 │   │   │   └── answer-schema.ts
 │   │   └── validation/
@@ -614,6 +620,59 @@ Nilai `status` yang diperbolehkan pada aplikasi minimal:
 
 UI harus membuat referensi berdasarkan `source_chunk_ids` yang sudah divalidasi oleh server.
 
+### Mode Chat Eksternal (Opsional, Demo/Dev Only)
+
+**Ini adalah pengecualian eksplisit dan terbatas terhadap batasan "jangan mengirim data
+ke API AI eksternal" di bagian 1 — dicatat di sini secara sengaja, bukan diam-diam.**
+
+Latensi chat lokal CPU-only (tanpa GPU) terbukti sangat lambat pada pengujian Task 5
+(~12 menit untuk satu jawaban singkat dengan model 3B parameter). Untuk demo di laptop
+tanpa GPU, aplikasi menyediakan `CHAT_PROVIDER` (env var, default **`local`**) yang bisa
+diisi `gemini`, `openai`, atau `anthropic` untuk memakai API cloud pihak ketiga sebagai
+pengganti Ollama **khusus untuk langkah generasi jawaban chat saja**.
+
+Aturan wajib untuk mode ini:
+
+1. **Default tetap `local`.** Tidak ada perilaku yang berubah kecuali seseorang secara
+   eksplisit mengubah `CHAT_PROVIDER` di `.env.local`.
+2. **Hanya langkah chat/generasi jawaban yang boleh eksternal.** Embedding dan seluruh
+   retrieval (pencarian dokumen) **tetap 100% lokal selalu**, tidak peduli nilai
+   `CHAT_PROVIDER` — lihat `src/server/usecases/retrieval/search-documents.usecase.ts`
+   dan `src/lib/ai/ollama-client.ts` (`embedTexts`), yang tidak dipengaruhi flag ini sama
+   sekali.
+3. **Jangan dipakai dengan dokumen perusahaan sungguhan/rahasia** sampai ada kebijakan
+   resmi perusahaan yang menyetujui vendor AI eksternal tertentu (lihat §18 keputusan 1
+   dan 7). Mode ini hanya untuk demo dengan data dummy/uji, atau pengembangan lokal oleh
+   developer dengan datanya sendiri.
+4. Saat aktif, aplikasi mencetak peringatan di server log (sekali per proses) yang
+   menyebutkan provider mana yang aktif — lihat `src/lib/ai/chat-completion.ts`.
+5. API key (`GEMINI_API_KEY`/`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`) wajib diisi sesuai
+   provider yang dipilih; aplikasi menolak start (error jelas saat environment dimuat)
+   jika `CHAT_PROVIDER` diisi tapi key yang sesuai kosong.
+6. Format JSON terstruktur yang sama (`llmAnswerSchema`) tetap divalidasi untuk respons
+   dari provider manapun — semua aturan validasi backend di bagian 8 (validasi
+   `source_chunk_ids`, aturan konflik butuh ≥2 dokumen, dll.) berlaku sama persis
+   terlepas dari provider yang menjawab.
+7. Model default per provider (`gemini-flash-lite-latest`, `gpt-4o-mini`,
+   `claude-haiku-4-5-20251001`) adalah pilihan dev/demo berbiaya rendah, **bukan**
+   rekomendasi model produksi — belum melalui evaluasi kualitas atau persetujuan
+   lisensi/keamanan apa pun.
+
+**Status verifikasi nyata (diperbarui setelah diuji dengan API key sungguhan):**
+Gemini sudah diuji end-to-end dengan key sungguhan dan berhasil — dua bug nyata ditemukan
+dan diperbaiki dalam prosesnya: (a) endpoint `generateContent` non-streaming hang tanpa
+respons di jaringan pengujian ini, diganti ke `streamGenerateContent` (SSE); (b)
+mengandalkan instruksi prompt saja membuat Gemini mengarang nama field JSON sendiri
+(bukan isi jawabannya — itu selalu benar), diperbaiki dengan `responseSchema` ketat
+(`llmAnswerGeminiSchema`). OpenAI dan Anthropic **belum** diuji dengan key sungguhan —
+risiko field JSON yang sama mungkin berlaku di sana juga karena keduanya juga hanya
+mengandalkan instruksi prompt (OpenAI punya mode `json_schema` strict yang lebih ketat,
+belum diterapkan karena belum terverifikasi). Detail lengkap ada di `README.md` bagian
+"Chat RAG".
+
+Lihat `README.md` bagian "Chat RAG" untuk cara mengaktifkan dan kode providernya di
+`src/lib/ai/providers/`.
+
 ---
 
 ## 9. Penanganan Konflik Dokumen
@@ -878,14 +937,14 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 
 ### Fase 3 — Chat RAG
 
-- [ ] Integrasi model lokal. (Ollama embedding sudah terintegrasi di Task 4; model chat/LLM lokal menyusul di Task 5.)
-- [x] Implementasi retrieval. (`searchDocuments` — hybrid vector + full-text dengan filter akses; belum dipanggil dari endpoint chat.)
-- [ ] Implementasi prompt berbasis konteks.
-- [ ] Validasi format respons.
-- [ ] Validasi source ID di backend.
-- [ ] Implementasi status insufficient evidence.
-- [ ] Implementasi tampilan sumber dan kutipan.
-- [ ] Simpan percakapan dan pesan.
+- [x] Integrasi model lokal. (Ollama embedding di Task 4; model chat `qwen2.5:3b-instruct` di Task 5.)
+- [x] Implementasi retrieval. (`searchDocuments` — hybrid vector + full-text dengan filter akses, sekarang dipanggil dari `askQuestion`.)
+- [x] Implementasi prompt berbasis konteks.
+- [x] Validasi format respons. (Zod + `format` JSON Schema terstruktur ke Ollama.)
+- [x] Validasi source ID di backend. (`source_chunk_ids` yang tidak ada di kandidat retrieval diturunkan ke `insufficient_evidence`.)
+- [x] Implementasi status insufficient evidence.
+- [x] Implementasi tampilan sumber dan kutipan. (API `/api/v1/chat` dan `/api/v1/conversations/:id` mengembalikan sumber; belum ada UI.)
+- [x] Simpan percakapan dan pesan.
 
 **Hasil:** chat menjawab berdasarkan dokumen dengan sumber.
 
@@ -1001,8 +1060,8 @@ Catat jawaban sebagai Architecture Decision Record (ADR) ketika tersedia.
 3. **Pengendalian dokumen:** siapa yang menetapkan status effective, superseded, dan hierarki antar dokumen?
 4. **Akses:** apakah hak akses berdasarkan proyek, departemen, klasifikasi, atau kombinasi? Termasuk: apakah perusahaan ingin RBAC granular per dokumen, atau sebagian/semua pengguna boleh membaca semua dokumen tanpa pembatasan ("open access")? Implementasi saat ini (Task 4, `getAccessibleDocumentIds`) default-deny ketat — dokumen baru tidak otomatis terlihat siapa pun kecuali ada baris `document_access` eksplisit. Opsi desain untuk mode "tanpa pembatasan" jika klien memintanya: (a) flag `documents.visibility: 'restricted' | 'company_wide'` per dokumen, atau (b) saklar kebijakan di `company_settings.settings` (mis. `documentAccessPolicy: 'open'`) yang melewati pengecekan grant sama sekali. Jangan diimplementasikan sebelum ada permintaan/klarifikasi dari klien.
 5. **Pengguna:** jumlah pengguna total dan concurrent users.
-6. **Hardware:** apakah perusahaan sudah menyediakan server GPU atau harus dianggarkan?
-7. **AI model:** model lokal mana yang disetujui oleh IT/security/legal?
+6. **Hardware:** apakah perusahaan sudah menyediakan server GPU atau harus dianggarkan? Diukur nyata pada Task 5: satu jawaban chat dari model 3B parameter di CPU (tanpa GPU) butuh ~12 menit. Ini bukan layak untuk penggunaan interaktif — GPU bukan "nice to have", melainkan prasyarat sebelum pilot produksi mana pun.
+7. **AI model:** model lokal mana yang disetujui oleh IT/security/legal? Dev default saat ini (`qwen2.5:3b-instruct`) terbukti pada pengujian manual Task 5 memberikan jawaban yang BENAR secara konsisten tetapi `status` self-report (`answered`/`conflict_detected`/`insufficient_evidence`) yang TIDAK konsisten pada pertanyaan identik — backend memvalidasi apa yang bisa divalidasi secara struktural (jumlah dokumen sumber, keabsahan source_chunk_ids), tetapi tidak ada cara memvalidasi "apakah model terlalu/tidak cukup percaya diri" tanpa benchmark SME yang sesungguhnya. Latensi CPU-only juga signifikan (~menit, bukan detik) — kebutuhan GPU untuk produksi (lihat keputusan 6) terkait langsung dengan pemilihan model ini.
 8. **Retensi:** berapa lama file, chat history, dan audit log harus disimpan?
 9. **Integrasi:** apakah WhatsApp diizinkan? Jika ya, kebijakan apa yang berlaku untuk data dan nomor telepon?
 10. **Kesiapan produksi:** siapa yang melakukan security review, validasi SME, dan approval go-live?
@@ -1024,7 +1083,7 @@ Claude Code harus bekerja secara bertahap dan tidak mencoba membangun seluruh si
 2. Periksa struktur repository dan file yang sudah ada sebelum membuat atau mengganti file.
 3. Jangan mengganti stack utama tanpa alasan kuat dan persetujuan pengguna.
 4. Utamakan TypeScript yang jelas, fungsi modular, validasi input, dan error handling.
-5. Jangan menambahkan API AI eksternal atau telemetry eksternal.
+5. Jangan menambahkan API AI eksternal atau telemetry eksternal. (Pengecualian tunggal yang sudah ada dan terdokumentasi: `CHAT_PROVIDER` opsional di bagian 8 "Mode Chat Eksternal" — jangan tambah pengecualian baru lain tanpa mendokumentasikannya di sana dengan cara yang sama.)
 5a. Pertahankan desain lintas industri; jangan hardcode `migas`, `DAK`, atau satu daftar kategori dokumen ke logika inti. Gunakan konfigurasi perusahaan dan metadata dokumen.
 5b. Jangan implementasikan multi-tenant atau `tenant_id`. Terapkan otorisasi server-side dan uji pembatasan akses berdasarkan role, cabang/pabrik, departemen, dan proyek jika fitur tersebut diaktifkan.
 5c. Semua endpoint API baru harus berada di bawah `/api/v1/...`. Jangan menggabungkan controller, use case/business logic, dan repository/akses data ke dalam satu file `route.ts`; pisahkan ke `src/server/controllers`, `src/server/usecases`, dan `src/server/repositories` sesuai struktur dan prinsip layering pada bagian 5 PLANNING.md agar mudah di-reuse dan di-test.
@@ -1084,6 +1143,10 @@ Claude Code harus bekerja secara bertahap dan tidak mencoba membangun seluruh si
 - Pastikan source ID divalidasi terhadap chunk hasil retrieval.
 - Implementasikan `answered`, `insufficient_evidence`, dan `conflict_detected`.
 - Tampilkan sumber dari metadata database.
+- *(Follow-up pasca-Task 5, atas permintaan eksplisit: ditambahkan `CHAT_PROVIDER`
+  opsional untuk demo tanpa GPU — lihat bagian 8 "Mode Chat Eksternal". Bukan bagian dari
+  Task 5 asli, didokumentasikan terpisah agar jelas ini permintaan tambahan, bukan scope
+  awal.)*
 
 **Task 6 — Authentication and authorization**
 

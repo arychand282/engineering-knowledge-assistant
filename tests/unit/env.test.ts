@@ -14,4 +14,37 @@ describe("env defaults", () => {
 
     expect(env.APP_URL).toBe("http://localhost:3000");
   });
+
+  it("defaults CHAT_PROVIDER to local with no API key required", async () => {
+    delete process.env.CHAT_PROVIDER;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+
+    const { env } = await import("@/lib/env");
+
+    expect(env.CHAT_PROVIDER).toBe("local");
+  });
+
+  it.each(["gemini", "openai", "anthropic"] as const)(
+    "throws when CHAT_PROVIDER=%s is set without its API key",
+    async (provider) => {
+      vi.stubEnv("CHAT_PROVIDER", provider);
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      delete process.env.ANTHROPIC_API_KEY;
+
+      await expect(import("@/lib/env")).rejects.toThrow(/wajib diisi/);
+    },
+  );
+
+  it("loads successfully when the matching API key is provided", async () => {
+    vi.stubEnv("CHAT_PROVIDER", "gemini");
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+
+    const { env } = await import("@/lib/env");
+
+    expect(env.CHAT_PROVIDER).toBe("gemini");
+    expect(env.GEMINI_API_KEY).toBe("test-key");
+  });
 });

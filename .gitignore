@@ -44,3 +44,6 @@ next-env.d.ts
 # uploaded documents (never commit real company documents)
 /storage/*
 !/storage/.gitkeep
+
+# local Claude Code harness state (not part of the application)
+/.claude/

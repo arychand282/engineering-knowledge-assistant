@@ -1,6 +1,7 @@
 import { and, asc, cosineDistance, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documentChunks, documents } from "@/lib/db/schema";
+import { buildOrTsQuery } from "@/lib/retrieval/build-or-tsquery";
 
 export type NewDocumentChunk = typeof documentChunks.$inferInsert;
 export type DocumentChunkRow = typeof documentChunks.$inferSelect;
@@ -80,17 +81,23 @@ export async function searchChunksByVector(
   return rows.map(({ distance: d, ...rest }) => ({ ...rest, score: 1 - d }));
 }
 
-/** PostgreSQL full-text search (config 'simple': Indonesian has no built-in FTS dictionary). */
+/**
+ * PostgreSQL full-text search (config 'simple': Indonesian has no built-in FTS
+ * dictionary). Uses OR semantics (buildOrTsQuery) rather than plainto_tsquery's AND —
+ * a natural-language question's own words (e.g. "bagaimana", "apa") otherwise have to
+ * literally appear in the matched content too, which fails almost every real question.
+ */
 export async function searchChunksByFullText(
   query: string,
   documentIds: string[],
   limit: number,
 ): Promise<ChunkSearchResult[]> {
-  if (documentIds.length === 0 || query.trim().length === 0) {
+  const orQuery = buildOrTsQuery(query);
+  if (documentIds.length === 0 || orQuery.length === 0) {
     return [];
   }
 
-  const tsquery = sql`plainto_tsquery('simple', ${query})`;
+  const tsquery = sql`to_tsquery('simple', ${orQuery})`;
   const rank = sql<number>`ts_rank(to_tsvector('simple', ${documentChunks.content}), ${tsquery})`;
 
   const rows = await db
