@@ -247,6 +247,44 @@ describe("askQuestion", () => {
     expect(result.sources).toEqual([]);
   });
 
+  it("substitutes a real message when the model self-reports insufficient_evidence with a blank answer", async () => {
+    // Real behavior observed in Task 7 evaluation (CHAT_PROVIDER=local,
+    // qwen2.5:3b-instruct): the model can self-report insufficient_evidence directly
+    // (not via either backend downgrade) while leaving `answer` blank.
+    await seedAccessibleChunk("Konten dokumen yang tidak relevan dengan pertanyaan.");
+    mockedGenerateChatCompletion.mockResolvedValue(
+      JSON.stringify({ status: "insufficient_evidence", answer: "", claims: [] }),
+    );
+
+    const result = await askQuestion({ message: "Pertanyaan tidak relevan", userId });
+    createdConversationIds.push(result.conversationId);
+
+    expect(result.message.answerStatus).toBe("insufficient_evidence");
+    expect(result.message.content.trim().length).toBeGreaterThan(0);
+  });
+
+  it("never attaches cited sources to a message whose final status is insufficient_evidence", async () => {
+    // Real behavior observed in Task 7 evaluation: the model self-reported
+    // insufficient_evidence while still citing a validatable chunk — showing a source
+    // card on a message that says "can't answer" is self-contradictory to the user.
+    const { chunk } = await seedAccessibleChunk(
+      "Pemesanan alat tulis kantor tiba dalam 3 hari kerja setelah formulir diajukan.",
+    );
+    mockedGenerateChatCompletion.mockResolvedValue(
+      JSON.stringify({
+        status: "insufficient_evidence",
+        answer: "Informasi yang tepat tidak dapat dipastikan dari dokumen yang diberikan.",
+        claims: [{ text: "Waktu tunggu 3 hari kerja.", source_chunk_ids: [chunk.id] }],
+      }),
+    );
+
+    const result = await askQuestion({ message: "Berapa lama waktu tunggu pemesanan?", userId });
+    createdConversationIds.push(result.conversationId);
+
+    expect(result.message.answerStatus).toBe("insufficient_evidence");
+    expect(result.sources).toEqual([]);
+  });
+
   it("rejects asking into a conversation owned by a different user", async () => {
     const [conversation] = await db
       .insert(conversations)

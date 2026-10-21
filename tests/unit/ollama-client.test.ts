@@ -15,6 +15,20 @@ function jsonResponse(body: unknown, init: { status?: number } = {}) {
   });
 }
 
+/** Ollama's streaming /api/chat sends newline-delimited JSON chunks — generateChatCompletion reads response.body as a stream, not response.json(). */
+function ndjsonResponse(chunks: unknown[], init: { status?: number } = {}): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(`${JSON.stringify(chunk)}\n`));
+      }
+      controller.close();
+    },
+  });
+  return new Response(body, { status: init.status ?? 200 });
+}
+
 describe("embedTexts", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -63,13 +77,17 @@ describe("generateChatCompletion", () => {
     vi.unstubAllGlobals();
   });
 
-  it("returns the message content on success", async () => {
+  it("returns the message content on success, assembled across multiple stream chunks", async () => {
     vi.stubGlobal(
       "fetch",
       vi
         .fn()
         .mockResolvedValue(
-          jsonResponse({ message: { role: "assistant", content: '{"status":"answered"}' } }),
+          ndjsonResponse([
+            { message: { role: "assistant", content: '{"status":' } },
+            { message: { role: "assistant", content: '"answered"}' } },
+            { message: { role: "assistant", content: "" }, done: true },
+          ]),
         ),
     );
 
@@ -87,7 +105,10 @@ describe("generateChatCompletion", () => {
   });
 
   it("throws OllamaUnavailableError when the response has no message content", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: {} })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(ndjsonResponse([{ message: {}, done: true }])),
+    );
 
     await expect(generateChatCompletion([{ role: "user", content: "hi" }])).rejects.toBeInstanceOf(
       OllamaUnavailableError,

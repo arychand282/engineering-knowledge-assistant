@@ -81,30 +81,107 @@ export interface ChatMessage {
  * Sends a chat completion request with the structured-output `format` set to our answer
  * JSON Schema (PLANNING.md #8: model must return structured JSON). Returns the raw
  * response text — schema validation with Zod happens in the usecase layer, not here.
+ *
+ * Uses `stream: true` (NDJSON), not `stream: false` — found via real Task 7 evaluation
+ * that a non-streaming request sends ZERO bytes until generation fully finishes, which
+ * on CPU-only inference (~12 minutes, see README) exceeds Node undici's internal
+ * `headersTimeout` default (5 minutes) and fails with `HeadersTimeoutError` — regardless
+ * of `OLLAMA_CHAT_TIMEOUT_MS` being configured much higher. Streaming sends headers and
+ * incremental chunks immediately, which keeps undici's timers satisfied the same way
+ * the Gemini client already had to switch to `streamGenerateContent` for an analogous
+ * reason. We still only need the fully-assembled string, not real token streaming to a
+ * frontend.
  */
 export async function generateChatCompletion(messages: ChatMessage[]): Promise<string> {
-  const response = await postJson(
-    "/api/chat",
-    { model: env.CHAT_MODEL, messages, stream: false, format: llmAnswerJsonSchema },
-    env.OLLAMA_CHAT_TIMEOUT_MS,
-  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.OLLAMA_CHAT_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(new URL("/api/chat", env.OLLAMA_BASE_URL), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: env.CHAT_MODEL,
+        messages,
+        stream: true,
+        format: llmAnswerJsonSchema,
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    throw new OllamaUnavailableError(error);
+  }
 
   if (!response.ok) {
+    clearTimeout(timeout);
     throw new OllamaUnavailableError(
       new Error(`Ollama /api/chat returned HTTP ${response.status}`),
       "Model chat lokal (Ollama) tidak dapat dihubungi.",
     );
   }
 
-  const data = (await response.json()) as { message?: { content?: string } };
-  if (!data.message?.content) {
-    throw new OllamaUnavailableError(
-      new Error("Ollama /api/chat returned no message content"),
-      "Model chat lokal (Ollama) tidak dapat dihubungi.",
-    );
+  try {
+    const content = await readNdjsonChatStream(response.body);
+    if (!content) {
+      throw new OllamaUnavailableError(
+        new Error("Ollama /api/chat returned no message content"),
+        "Model chat lokal (Ollama) tidak dapat dihubungi.",
+      );
+    }
+    return content;
+  } catch (error) {
+    if (error instanceof OllamaUnavailableError) {
+      throw error;
+    }
+    throw new OllamaUnavailableError(error, "Model chat lokal (Ollama) tidak dapat dihubungi.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Ollama's streaming /api/chat sends newline-delimited JSON objects, each with a `message.content` fragment, until a final `{"done":true}` line. */
+async function readNdjsonChatStream(body: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!body) {
+    return "";
   }
 
-  return data.message.content;
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let combined = "";
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      combined += parseNdjsonChatLine(line);
+    }
+  }
+  if (buffer.trim()) {
+    combined += parseNdjsonChatLine(buffer);
+  }
+
+  return combined;
+}
+
+function parseNdjsonChatLine(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return "";
+  }
+  try {
+    const chunk = JSON.parse(trimmed) as { message?: { content?: string } };
+    return chunk.message?.content ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export interface OllamaHealth {

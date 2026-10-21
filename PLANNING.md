@@ -1011,16 +1011,16 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 
 ### Fase 5 — Kualitas dan demo
 
-- [ ] Buat dataset pertanyaan uji.
-- [ ] Ukur retrieval dan akurasi sitasi.
-- [ ] Uji pertanyaan tanpa jawaban.
-- [ ] Uji konflik revisi.
-- [ ] Uji prompt injection.
-- [ ] Perbaiki masalah utama.
-- [ ] Buat demo script dan dokumentasi.
-- [ ] Catat keterbatasan yang masih ada.
+- [x] Buat dataset pertanyaan uji. _(`scripts/eval/dataset.ts` — 4 dokumen dummy, 7 kasus uji.)_
+- [x] Ukur retrieval dan akurasi sitasi. _(6/7 kasus lolos nyata; lihat `docs/evaluation.md`.)_
+- [x] Uji pertanyaan tanpa jawaban. _(Akses kosong dan akses-ada-tapi-tidak-relevan, keduanya diuji nyata.)_
+- [x] Uji konflik revisi. _(Dua revisi diakses bersama → `conflict_detected` terpicu nyata.)_
+- [x] Uji prompt injection. _(Dalam dokumen: ditangkal. Dalam pertanyaan pengguna: status/format aman tapi isi jawaban sebagian mematuhi — lihat catatan di `docs/evaluation.md`, bukan klaim ketahanan penuh.)_
+- [x] Perbaiki masalah utama. _(Bug nyata: timeout chat lokal >5 menit (`HeadersTimeoutError`) dan sumber/jawaban kosong yang tidak konsisten pada `insufficient_evidence` — keduanya diperbaiki dan diverifikasi ulang. Satu temuan (model salah abstain pada konteks yang cukup) sengaja TIDAK "diperbaiki" dengan heuristik tambahan — didokumentasikan sebagai keterbatasan model, bukan bug kode.)_
+- [x] Buat demo script dan dokumentasi. _(`docs/demo-script.md`.)_
+- [x] Catat keterbatasan yang masih ada. _(README "Keterbatasan saat ini" + `docs/evaluation.md`.)_
 
-**Hasil:** prototype siap didemokan dengan hasil evaluasi yang transparan.
+**Hasil:** prototype siap didemokan dengan hasil evaluasi yang transparan. ✅ Selesai (Task 7).
 
 ### Fase lanjutan setelah prototype
 
@@ -1050,20 +1050,24 @@ Estimasi tersebut bukan jaminan. Air-gapped deployment, SSO, OCR kompleks, dan a
 
 Prototype dianggap selesai bila:
 
-- [ ] Dapat dijalankan dari instruksi README pada lingkungan development yang disiapkan.
-- [ ] Dapat mengunggah PDF teks dummy.
-- [ ] Teks diekstrak dan nomor halaman tersimpan dengan benar.
-- [ ] Embedding dibuat tanpa API eksternal.
-- [ ] Pengguna dapat bertanya lewat web chat.
-- [ ] Jawaban berdasarkan chunk yang ditemukan.
-- [ ] Sumber berasal dari record database yang benar dan menampilkan halaman akurat.
-- [ ] Pertanyaan tanpa bukti tidak dipaksa dijawab.
-- [ ] Kegagalan runtime AI ditangani secara aman.
-- [ ] Dokumen dibatasi berdasarkan hak akses di backend.
-- [ ] Tes utama lulus.
-- [ ] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
-- [ ] Keterbatasan prototype didokumentasikan.
-- [ ] Tidak ada secret atau dokumen rahasia yang masuk Git.
+- [x] Dapat dijalankan dari instruksi README pada lingkungan development yang disiapkan.
+- [x] Dapat mengunggah PDF teks dummy.
+- [x] Teks diekstrak dan nomor halaman tersimpan dengan benar.
+- [x] Embedding dibuat tanpa API eksternal.
+- [x] Pengguna dapat bertanya lewat web chat.
+- [x] Jawaban berdasarkan chunk yang ditemukan.
+- [x] Sumber berasal dari record database yang benar dan menampilkan halaman akurat.
+- [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
+- [x] Kegagalan runtime AI ditangani secara aman.
+- [x] Dokumen dibatasi berdasarkan hak akses di backend.
+- [x] Tes utama lulus. _(86 unit + 44 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
+- [x] Keterbatasan prototype didokumentasikan.
+- [x] Tidak ada secret atau dokumen rahasia yang masuk Git.
+
+**Semua item Definition of Done terpenuhi.** Ini tidak berarti siap produksi — lihat §18
+(keputusan yang masih perlu klarifikasi klien/IT/security) dan README "Keterbatasan saat
+ini" untuk apa yang masih harus diselesaikan sebelum pilot produksi sungguhan.
 
 ---
 
@@ -1211,6 +1215,13 @@ Claude Code harus bekerja secara bertahap dan tidak mencoba membangun seluruh si
 - Perbaiki error state dan UX.
 - Dokumentasikan cara demo dan keterbatasan.
 - Perbarui status checklist.
+- *(Selesai. Dataset: `scripts/eval/dataset.ts`. Hasil nyata: 6/7 kasus lolos — lihat
+  `docs/evaluation.md` untuk rincian lengkap, termasuk dua bug nyata yang ditemukan
+  dan diperbaiki (timeout chat lokal `stream:false`, dan sumber/jawaban kosong yang
+  tidak konsisten pada status `insufficient_evidence`), serta satu temuan yang
+  SENGAJA TIDAK diperbaiki dengan heuristik tambahan (model kecil ini kadang salah
+  abstain pada konteks yang cukup — keterbatasan model, bukan bug kode, konsisten
+  dengan temuan Task 5). Demo script: `docs/demo-script.md`.)*
 
 ### Prompt awal untuk Claude Code
 

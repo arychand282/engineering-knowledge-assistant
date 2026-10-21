@@ -3,9 +3,11 @@
 Aplikasi pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. Lihat
 `PLANNING.md` untuk rencana kerja lengkap, batasan keamanan, dan roadmap tahapan.
 
-> **Status saat ini:** Task 1–6 selesai (fondasi aplikasi, database, document ingestion,
-> local embeddings & retrieval, chat RAG lokal, dan autentikasi/otorisasi sungguhan).
-> Task 7 (evaluasi dan polish) menyusul.
+> **Status saat ini:** Task 1–7 selesai (fondasi aplikasi, database, document ingestion,
+> local embeddings & retrieval, chat RAG lokal, autentikasi/otorisasi sungguhan, dan
+> evaluasi nyata — lihat `docs/evaluation.md`). Prototype siap didemokan
+> (`docs/demo-script.md`) dengan keterbatasan yang didokumentasikan secara transparan
+> di bawah — bukan siap produksi.
 
 ## Stack
 
@@ -227,6 +229,16 @@ kecepatan untuk aplikasi ini, jadi model kecil ditolak. `OLLAMA_CHAT_TIMEOUT_MS`
 900000 (15 menit) mengakomodasi ini; hardware GPU wajib untuk latensi yang layak produksi
 (PLANNING.md §18 keputusan 6).
 
+**Bug nyata yang ditemukan di Task 7 dan diperbaiki:** request chat lokal yang lebih
+lambat dari 5 menit SELALU gagal dengan `HeadersTimeoutError`, terlepas dari
+`OLLAMA_CHAT_TIMEOUT_MS` — karena request non-streaming tidak mengirim satu byte pun
+sampai jawaban selesai dibuat, melebihi `headersTimeout` bawaan Node `undici` (5 menit).
+Diperbaiki dengan beralih ke `stream: true` + pembacaan NDJSON progresif
+(`src/lib/ai/ollama-client.ts`) — pola yang sama dengan perbaikan Gemini di atas. Lihat
+`docs/evaluation.md` untuk rincian lengkap evaluasi Task 7 (metodologi, dataset, dan
+temuan lain, termasuk false-negative `insufficient_evidence` yang reproducible pada
+konteks yang sebenarnya cukup — keterbatasan model, bukan bug kode).
+
 #### Mode demo tanpa GPU: provider chat eksternal (opsional)
 
 Kalau laptop kamu tidak punya GPU dan ~12 menit per jawaban terlalu lama untuk demo, set
@@ -349,6 +361,20 @@ tidak — IDOR dicegah lewat `404`). Semua diuji pada level usecase dengan DB su
 end-to-end lewat HTTP (`fetch` ke route yang berjalan) belum ada — divalidasi secara manual
 lewat `curl` sebagai gantinya (lihat bagian "Autentikasi dan otorisasi" di atas).
 
+### Evaluasi Task 7 (bukan bagian dari `npm test`)
+
+```bash
+npx tsx scripts/eval/run-eval.ts              # jalankan evaluasi, bersihkan data sesudahnya
+npx tsx scripts/eval/run-eval.ts --keep-data  # biarkan data eval untuk inspeksi manual
+```
+
+Berbeda dari `npm run test:integration`, skrip ini memanggil model chat **sungguhan**
+(bukan mock) lewat `CHAT_PROVIDER` apa pun yang aktif di `.env.local` — dengan `local`,
+ini bisa butuh puluhan menit (beberapa kasus yang genuinely perlu memanggil model).
+Bukan bagian dari test suite otomatis karena alasan yang sama dengan `ask-question.test.ts`
+di atas. Hasil tertulis ke `docs/eval/results.md`; ringkasan dan analisis di
+`docs/evaluation.md`.
+
 ## Troubleshooting
 
 - **`tsc` gagal dengan error `Cannot find name 'LayoutProps'`**: jalankan `npm run typecheck`
@@ -433,9 +459,29 @@ cookies.txt` disertakan di permintaan berikutnya.
 - Field `warning` di contoh kontrak PLANNING.md #8 tidak disimpan sebagai kolom terpisah —
   `messages` tidak punya kolom untuk itu, jadi penjelasan konflik/downgrade digabung ke
   dalam teks `answer`/`content` itu sendiri.
-- Provider chat eksternal (`CHAT_PROVIDER=gemini/openai/anthropic`) belum pernah diuji
-  dengan API key sungguhan — hanya mocked unit test + satu request nyata dengan key palsu
-  (lihat bagian "Chat RAG" di atas). Fitur ini juga merupakan pengecualian eksplisit
-  terhadap batasan "tanpa AI eksternal" PLANNING.md — default tetap `local`, dan jangan
-  dipakai dengan dokumen perusahaan sungguhan sampai ada persetujuan kebijakan formal.
+- Provider chat eksternal `openai`/`anthropic` belum pernah diuji dengan API key
+  sungguhan — hanya mocked unit test (lihat "Status verifikasi per provider" di bagian
+  "Chat RAG" di atas; `gemini` SUDAH diuji end-to-end dengan key sungguhan dan berhasil).
+  Fitur ini juga merupakan pengecualian eksplisit terhadap batasan "tanpa AI eksternal"
+  PLANNING.md — default tetap `local`, dan jangan dipakai dengan dokumen perusahaan
+  sungguhan sampai ada persetujuan kebijakan formal.
+- **Model `qwen2.5:3b-instruct` bisa salah abstain (false negative) pada konteks yang
+  sebenarnya cukup** — ditemukan reproducible (dua kali berturut-turut) lewat evaluasi
+  Task 7: pertanyaan dengan jawaban eksplisit di satu dokumen yang diizinkan tetap
+  dijawab `insufficient_evidence`. Ini bukan bug kode (backend sudah memvalidasi semua
+  yang bisa divalidasi struktural) — ini keterbatasan model 3B parameter ini sendiri,
+  dan sengaja TIDAK "diperbaiki" dengan heuristik tambahan (lihat `docs/evaluation.md`
+  untuk analisis lengkap serta alasan mengapa menambah heuristik akan jadi tebakan
+  tanpa dasar). Mengarah ke sisi yang lebih aman (menolak menjawab) daripada sisi
+  berbahaya (jawaban salah dengan percaya diri), tapi tetap berarti akurasi jawaban
+  belum bisa diandalkan tanpa benchmark SME sungguhan (PLANNING.md §18 keputusan 7).
+- **Ketahanan terhadap prompt injection lewat pertanyaan pengguna belum terbukti kuat**
+  — pada satu kasus uji nyata, model tetap menuliskan kata yang diminta penyerang
+  ("HACKED") sebagai isi jawaban, meski status akhir dan format JSON tetap benar (lihat
+  `docs/evaluation.md` "Catatan penting"). Injection yang diselipkan DI DALAM dokumen
+  berhasil ditangkal pada pengujian yang sama. Baru diuji dengan satu pola literal per
+  jenis — belum representasi menyeluruh.
+- Lihat `docs/evaluation.md` untuk laporan evaluasi Task 7 selengkapnya (metodologi,
+  dataset, dan temuan), dan `docs/demo-script.md` untuk panduan demo langkah demi
+  langkah.
 - Prototype ini belum siap untuk penggunaan produksi atau operasional kritis.

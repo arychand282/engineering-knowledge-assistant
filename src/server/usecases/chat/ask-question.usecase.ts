@@ -170,13 +170,16 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
     }
   }
 
-  return finalizeTurn(
-    conversation,
-    finalAnswer,
-    finalStatus,
-    dedupedSourceChunks,
-    contextDocuments,
-  );
+  // Task 7 evaluation found two real model behaviors neither branch above covers: the
+  // model self-reporting insufficient_evidence directly (not via either downgrade
+  // above) with a blank `answer`, and the model citing valid sources on a message that
+  // still says it can't answer — self-contradictory from the user's point of view.
+  if (finalStatus === "insufficient_evidence" && finalAnswer.trim().length === 0) {
+    finalAnswer = NO_EVIDENCE_ANSWER;
+  }
+  const finalSourceChunks = finalStatus === "answered" ? dedupedSourceChunks : [];
+
+  return finalizeTurn(conversation, finalAnswer, finalStatus, finalSourceChunks, contextDocuments);
 }
 
 async function requireOwnedConversation(
