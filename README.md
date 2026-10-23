@@ -209,6 +209,14 @@ dibuat. Endpoint lain: `GET /api/v1/conversations` (daftar percakapan milik peng
 /api/v1/conversations/:id` (hapus). Ketiganya menolak percakapan milik user lain dengan
 `404` (bukan `403`, agar tidak membocorkan keberadaan resource — mencegah IDOR).
 
+Setiap pertanyaan baru dalam percakapan yang sama menyertakan hingga `CHAT_HISTORY_LIMIT`
+(default 10) pesan sebelumnya sebagai riwayat ke model, supaya pertanyaan lanjutan
+("nomor dokumennya berapa?" tanpa menyebut ulang dokumennya) tetap nyambung dengan
+jawaban sebelumnya. **Catatan:** ini hanya memperbaiki ingatan model terhadap
+percakapan — pencarian dokumen (`searchDocuments`) tetap hanya memakai teks pertanyaan
+terbaru apa adanya, jadi pertanyaan lanjutan yang kata kuncinya tidak tumpang tindih
+dengan isi dokumen tetap bisa gagal retrieval meski modelnya sudah "ingat" konteksnya.
+
 Alur `askQuestion` (`src/server/usecases/chat/ask-question.usecase.ts`) mengikuti urutan
 di PLANNING.md §8: retrieval dengan filter akses dulu → jika tidak ada bukti sama sekali,
 `insufficient_evidence` **tanpa** memanggil model → jika ditemukan dokumen yang saling
