@@ -11,7 +11,10 @@ const DOCUMENT_MANAGEMENT_ROLES = ["admin", "document_controller"];
 
 export function DocumentsPageClient() {
   const { user } = useAuth();
-  const canUpload = user?.roles.some((role) => DOCUMENT_MANAGEMENT_ROLES.includes(role)) ?? false;
+  // Mirrors DOCUMENT_MANAGEMENT_ROLES server-side (src/server/auth/roles.ts) — this is
+  // only a UI convenience to hide controls the user can't use; the PATCH endpoint
+  // itself re-checks the role server-side regardless of what the client shows.
+  const canManage = user?.roles.some((role) => DOCUMENT_MANAGEMENT_ROLES.includes(role)) ?? false;
   const [documents, setDocuments] = useState<DocumentRowView[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ export function DocumentsPageClient() {
 
   return (
     <div className="space-y-6">
-      {canUpload ? (
+      {canManage ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Unggah dokumen baru
@@ -52,7 +55,7 @@ export function DocumentsPageClient() {
             {error}
           </p>
         ) : null}
-        <DocumentTable documents={documents} />
+        <DocumentTable documents={documents} canEdit={canManage} onUpdated={loadDocuments} />
       </section>
     </div>
   );

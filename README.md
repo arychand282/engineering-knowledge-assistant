@@ -463,8 +463,10 @@ cookies.txt` disertakan di permintaan berikutnya.
   `multipart/form-data`) — cukup untuk prototype, tapi bukan pengganti token CSRF untuk
   kasus yang butuh dukungan browser lama atau subdomain yang tidak dipercaya.
 - `PATCH /api/v1/documents/:id` (ubah status/metadata; role `admin`/`document_controller`)
-  sudah ada, tapi belum ada UI untuk memanggilnya — pengubahan status/metadata lewat web
-  masih manual lewat API. Belum ada endpoint `GET /api/v1/documents/:id/pages/:page`
+  punya UI di `/documents` (tombol "Edit" per baris, hanya tampil untuk role yang
+  berwenang) — tapi hanya untuk field inti (judul, nomor, tipe, revisi, status).
+  `effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId` masih API-only, belum
+  ada form untuk itu. Belum ada endpoint `GET /api/v1/documents/:id/pages/:page`
   (preview satu halaman) — masih di rencana PLANNING.md §12, di luar scope literal Task 3.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
   operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
