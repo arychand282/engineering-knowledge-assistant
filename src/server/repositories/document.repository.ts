@@ -16,6 +16,18 @@ export async function findDocumentById(id: string): Promise<DocumentRow | null> 
   return row ?? null;
 }
 
+export async function updateDocumentById(
+  id: string,
+  patch: Partial<NewDocument>,
+): Promise<DocumentRow | null> {
+  const [row] = await db
+    .update(documents)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(documents.id, id))
+    .returning();
+  return row ?? null;
+}
+
 export async function findDocumentBySha256(sha256: string): Promise<DocumentRow | null> {
   const [row] = await db.select().from(documents).where(eq(documents.sha256, sha256));
   return row ?? null;

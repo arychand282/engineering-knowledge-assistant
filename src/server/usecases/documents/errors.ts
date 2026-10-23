@@ -27,3 +27,10 @@ export class DocumentNotFoundError extends Error {
     this.name = "DocumentNotFoundError";
   }
 }
+
+export class SelfSupersedeError extends Error {
+  constructor() {
+    super("Dokumen tidak boleh menjadi supersedesDocumentId untuk dirinya sendiri.");
+    this.name = "SelfSupersedeError";
+  }
+}

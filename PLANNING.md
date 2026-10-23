@@ -823,8 +823,12 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
   - Preview halaman atau teks sesuai kebijakan akses.
 - `POST /api/v1/documents/:id/reprocess`
   - Memproses ulang dokumen; admin/document controller.
-- `PATCH /api/v1/documents/:id`
-  - Mengubah metadata/status sesuai role dan aturan approval.
+- `PATCH /api/v1/documents/:id` — **Diimplementasikan.**
+  - Mengubah metadata/status; role `admin`/`document_controller` saja (`DOCUMENT_MANAGEMENT_ROLES`).
+    Partial update (field yang tidak dikirim tidak berubah; `null` eksplisit mengosongkan
+    kolom nullable). Menolak dokumen men-supersede dirinya sendiri. Tercatat di audit log
+    (`update_document`). Belum ada alur approval berjenjang — itu bagian "Fase lanjutan
+    setelah prototype" (§15), bukan endpoint CRUD role-gated ini.
 
 ### Chat
 
@@ -1063,7 +1067,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(86 unit + 44 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(97 unit + 51 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

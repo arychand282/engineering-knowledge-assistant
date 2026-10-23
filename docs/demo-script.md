@@ -89,7 +89,9 @@ Eksternal").
 - Model lokal (tanpa GPU) lambat (~12 menit/jawaban) — prasyarat GPU untuk produksi.
 - MFA belum ada untuk akun admin.
 - Rate limiting bersifat in-memory per-proses, bukan terdistribusi.
-- Belum ada endpoint untuk mengubah status/metadata dokumen atau pratinjau halaman.
+- Endpoint untuk mengubah status/metadata dokumen (`PATCH /api/v1/documents/:id`) sudah
+  ada, tapi belum ada tombol di UI — masih harus dipanggil langsung lewat API. Belum ada
+  endpoint pratinjau halaman.
 - Model embedding/chat dev saat ini adalah default sementara, bukan keputusan final
   yang sudah melalui benchmark bahasa Indonesia atau persetujuan lisensi.
 

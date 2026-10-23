@@ -155,7 +155,22 @@ curl -b cookies.txt -X POST http://localhost:3000/api/v1/documents \
 
 Endpoint lain yang tersedia: `GET /api/v1/documents` (daftar + pagination/filter),
 `GET /api/v1/documents/:id` (detail + status ekstraksi per halaman),
-`POST /api/v1/documents/:id/reprocess` (ekstraksi ulang dari file yang tersimpan).
+`POST /api/v1/documents/:id/reprocess` (ekstraksi ulang dari file yang tersimpan),
+`PATCH /api/v1/documents/:id` (ubah status/metadata — role `admin`/`document_controller`).
+
+`PATCH` menerima partial update dalam JSON body — kirim hanya field yang ingin diubah;
+field nullable (`effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId`) bisa
+dikosongkan dengan mengirim `null` secara eksplisit:
+
+```bash
+curl -b cookies.txt -X PATCH http://localhost:3000/api/v1/documents/<id> \
+  -H "Content-Type: application/json" \
+  -d '{"status": "effective", "effectiveDate": "2026-01-01"}'
+```
+
+Setiap perubahan status/metadata tercatat di audit log (`update_document`). Ini murni
+operasi CRUD role-gated — bukan alur approval berjenjang (itu tetap di roadmap "Fase
+lanjutan", lihat PLANNING.md §15).
 
 Respons upload/reprocess menyertakan `embeddedCount` dan `embeddingSkipped`. Jika Ollama
 sedang tidak aktif, upload tetap berhasil (chunk & metadata tersimpan) tapi
@@ -439,9 +454,10 @@ cookies.txt` disertakan di permintaan berikutnya.
   `SameSite=Lax` (tidak terkirim pada request cross-site, termasuk upload
   `multipart/form-data`) — cukup untuk prototype, tapi bukan pengganti token CSRF untuk
   kasus yang butuh dukungan browser lama atau subdomain yang tidak dipercaya.
-- Belum ada endpoint `PATCH /api/v1/documents/:id` (ubah status/metadata) atau
-  `GET /api/v1/documents/:id/pages/:page` (preview satu halaman) — keduanya ada di rencana
-  PLANNING.md §12 tapi di luar scope literal Task 3.
+- `PATCH /api/v1/documents/:id` (ubah status/metadata; role `admin`/`document_controller`)
+  sudah ada, tapi belum ada UI untuk memanggilnya — pengubahan status/metadata lewat web
+  masih manual lewat API. Belum ada endpoint `GET /api/v1/documents/:id/pages/:page`
+  (preview satu halaman) — masih di rencana PLANNING.md §12, di luar scope literal Task 3.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
   operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
 - Chunking memakai perkiraan jumlah kata sebagai proksi token (bukan tokenizer LLM

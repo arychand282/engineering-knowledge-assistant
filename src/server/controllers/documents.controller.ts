@@ -4,6 +4,7 @@ import { env } from "@/lib/env";
 import {
   documentIdParamSchema,
   listDocumentsQuerySchema,
+  updateDocumentSchema,
   uploadDocumentMetadataSchema,
 } from "@/server/dto/documents.dto";
 import { DOCUMENT_MANAGEMENT_ROLES } from "@/server/auth/roles";
@@ -15,10 +16,12 @@ import {
   DuplicateDocumentError,
   FileTooLargeError,
   InvalidFileError,
+  SelfSupersedeError,
   TooManyPagesError,
 } from "@/server/usecases/documents/errors";
 import { listDocuments } from "@/server/usecases/documents/list-documents.usecase";
 import { reprocessDocument } from "@/server/usecases/documents/reprocess-document.usecase";
+import { updateDocument } from "@/server/usecases/documents/update-document.usecase";
 import { uploadDocument } from "@/server/usecases/documents/upload-document.usecase";
 import { jsonError, rateLimited, zodBadRequest } from "./_http-errors";
 import { type Actor, ForbiddenError, UnauthenticatedError, getActor, requireRole } from "./_actor";
@@ -158,6 +161,50 @@ export async function getDocumentById(_request: Request, context: RouteContext) 
   } catch (error) {
     if (error instanceof DocumentNotFoundError) {
       return jsonError(404, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function patchDocument(request: Request, context: RouteContext) {
+  const actor = await resolveActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  try {
+    requireRole(actor, DOCUMENT_MANAGEMENT_ROLES);
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return jsonError(403, error.message);
+    }
+    throw error;
+  }
+
+  const paramsResult = documentIdParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  const body = await request.json().catch(() => null);
+  const bodyResult = updateDocumentSchema.safeParse(body);
+  if (!bodyResult.success) {
+    return zodBadRequest(bodyResult.error);
+  }
+
+  try {
+    const document = await updateDocument({
+      documentId: paramsResult.data.id,
+      patch: bodyResult.data,
+      actorUserId: actor.id,
+    });
+    return NextResponse.json({ document });
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError) {
+      return jsonError(404, error.message);
+    }
+    if (error instanceof SelfSupersedeError) {
+      return jsonError(400, error.message);
     }
     throw error;
   }
