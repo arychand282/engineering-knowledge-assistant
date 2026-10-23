@@ -9,6 +9,7 @@ vi.mock("@/lib/ai/ollama-client", async (importOriginal) => {
 
 import { OllamaUnavailableError, embedTexts, generateChatCompletion } from "@/lib/ai/ollama-client";
 import { db, pool } from "@/lib/db";
+import { env } from "@/lib/env";
 import {
   conversations,
   documentAccess,
@@ -283,6 +284,87 @@ describe("askQuestion", () => {
 
     expect(result.message.answerStatus).toBe("insufficient_evidence");
     expect(result.sources).toEqual([]);
+  });
+
+  it("sends prior turns of the same conversation as history to the model", async () => {
+    const { chunk } = await seedAccessibleChunk(
+      "Tekanan maksimum boiler adalah 12 bar menurut SOP terbaru.",
+    );
+
+    mockedGenerateChatCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        status: "answered",
+        answer: "Tekanan maksimum boiler adalah 12 bar.",
+        claims: [{ text: "Tekanan maksimum 12 bar.", source_chunk_ids: [chunk.id] }],
+      }),
+    );
+    const first = await askQuestion({
+      message: "Berapa tekanan maksimum boiler?",
+      userId,
+    });
+    createdConversationIds.push(first.conversationId);
+
+    mockedGenerateChatCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        status: "answered",
+        answer: "Sesuai SOP terbaru yang sama.",
+        claims: [{ text: "Sesuai SOP terbaru.", source_chunk_ids: [chunk.id] }],
+      }),
+    );
+    await askQuestion({
+      conversationId: first.conversationId,
+      message: "SOP yang mana?",
+      userId,
+    });
+
+    expect(mockedGenerateChatCompletion).toHaveBeenCalledTimes(2);
+    const secondCallMessages = mockedGenerateChatCompletion.mock.calls[1][0];
+    expect(secondCallMessages).toContainEqual({
+      role: "user",
+      content: "Berapa tekanan maksimum boiler?",
+    });
+    expect(secondCallMessages).toContainEqual({
+      role: "assistant",
+      content: "Tekanan maksimum boiler adalah 12 bar.",
+    });
+    // The current turn's question (with RAG context attached) must come after history,
+    // not be swallowed by it.
+    expect(secondCallMessages.at(-1)?.content).toContain("SOP yang mana?");
+  });
+
+  it("omits history entirely when CHAT_HISTORY_LIMIT is 0", async () => {
+    const { chunk } = await seedAccessibleChunk("Konten dokumen uji batas riwayat percakapan.");
+    const original = env.CHAT_HISTORY_LIMIT;
+    env.CHAT_HISTORY_LIMIT = 0;
+    try {
+      mockedGenerateChatCompletion.mockResolvedValueOnce(
+        JSON.stringify({
+          status: "answered",
+          answer: "Jawaban pertama.",
+          claims: [{ text: "Klaim pertama.", source_chunk_ids: [chunk.id] }],
+        }),
+      );
+      const first = await askQuestion({ message: "Pertanyaan pertama", userId });
+      createdConversationIds.push(first.conversationId);
+
+      mockedGenerateChatCompletion.mockResolvedValueOnce(
+        JSON.stringify({
+          status: "answered",
+          answer: "Jawaban kedua.",
+          claims: [{ text: "Klaim kedua.", source_chunk_ids: [chunk.id] }],
+        }),
+      );
+      await askQuestion({
+        conversationId: first.conversationId,
+        message: "Pertanyaan kedua",
+        userId,
+      });
+
+      const secondCallMessages = mockedGenerateChatCompletion.mock.calls[1][0];
+      expect(secondCallMessages).toHaveLength(2); // system + current turn only
+    } finally {
+      env.CHAT_HISTORY_LIMIT = original;
+    }
   });
 
   it("rejects asking into a conversation owned by a different user", async () => {

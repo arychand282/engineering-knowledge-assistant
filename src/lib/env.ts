@@ -24,6 +24,10 @@ const baseEnvSchema = z.object({
   // production SLA.
   OLLAMA_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
   CHAT_RETRIEVAL_LIMIT: z.coerce.number().int().positive().default(6),
+  // Prior turns (user+assistant messages) included in the prompt so the model can
+  // follow up on its own earlier answers. Counts messages, not tokens — a long answer
+  // still counts as one. Tune down if context windows get too large for the chat model.
+  CHAT_HISTORY_LIMIT: z.coerce.number().int().min(0).default(10),
 
   // OPT-IN exception to "no external AI" (PLANNING.md "Mode Chat Eksternal"), default
   // stays "local" so nothing changes unless explicitly configured. When set to a cloud
@@ -76,6 +80,7 @@ export type Env = {
   CHAT_MODEL: string;
   OLLAMA_CHAT_TIMEOUT_MS: number;
   CHAT_RETRIEVAL_LIMIT: number;
+  CHAT_HISTORY_LIMIT: number;
   CHAT_PROVIDER: "local" | "gemini" | "openai" | "anthropic";
   EXTERNAL_CHAT_TIMEOUT_MS: number;
   GEMINI_API_KEY?: string;
@@ -110,6 +115,7 @@ function loadEnv(): Env {
     CHAT_MODEL: process.env.CHAT_MODEL,
     OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
     CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
+    CHAT_HISTORY_LIMIT: process.env.CHAT_HISTORY_LIMIT,
     CHAT_PROVIDER: process.env.CHAT_PROVIDER,
     EXTERNAL_CHAT_TIMEOUT_MS: process.env.EXTERNAL_CHAT_TIMEOUT_MS,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,

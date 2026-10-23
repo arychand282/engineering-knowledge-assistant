@@ -14,7 +14,11 @@ import {
   type ConversationRow,
 } from "@/server/repositories/conversation.repository";
 import { findDocumentsByIds, type DocumentRow } from "@/server/repositories/document.repository";
-import { insertMessage, type MessageRow } from "@/server/repositories/message.repository";
+import {
+  insertMessage,
+  listMessagesByConversationId,
+  type MessageRow,
+} from "@/server/repositories/message.repository";
 import { insertMessageSources } from "@/server/repositories/message-source.repository";
 import { searchDocuments } from "@/server/usecases/retrieval/search-documents.usecase";
 import { ConversationNotFoundError } from "./errors";
@@ -57,6 +61,11 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
 
   await insertMessage({ conversationId: conversation.id, role: "user", content: input.message });
 
+  // Earlier turns of THIS conversation only, oldest-first, capped at CHAT_HISTORY_LIMIT —
+  // without this the model sees each question in isolation and can't follow up on its
+  // own prior answer (e.g. "dan halaman berapa?" referring to the previous question).
+  const history = await buildHistoryMessages(conversation.id);
+
   const retrieval = await searchDocuments({
     query: input.message,
     userId: input.userId,
@@ -97,6 +106,7 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
 
   const chatMessages: ChatMessage[] = [
     { role: "system", content: CHAT_SYSTEM_PROMPT },
+    ...history,
     { role: "user", content: buildChatUserPrompt(input.message, promptChunks) },
   ];
 
@@ -180,6 +190,25 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
   const finalSourceChunks = finalStatus === "answered" ? dedupedSourceChunks : [];
 
   return finalizeTurn(conversation, finalAnswer, finalStatus, finalSourceChunks, contextDocuments);
+}
+
+/**
+ * Prior messages of this conversation as chat history, oldest-first, excluding the
+ * user message just inserted for the current turn (that's added separately, together
+ * with this turn's retrieved context). Assistant turns carry only the final answer text
+ * actually shown to the user — not the retrieved chunks or raw model JSON behind it —
+ * to keep the prompt bounded; the current turn still gets its own full RAG context.
+ */
+async function buildHistoryMessages(conversationId: string): Promise<ChatMessage[]> {
+  if (env.CHAT_HISTORY_LIMIT === 0) {
+    return [];
+  }
+  const allMessages = await listMessagesByConversationId(conversationId);
+  const priorMessages = allMessages.slice(0, -1).slice(-env.CHAT_HISTORY_LIMIT);
+  return priorMessages.map((message) => ({
+    role: message.role === "assistant" ? "assistant" : "user",
+    content: message.content,
+  }));
 }
 
 async function requireOwnedConversation(
