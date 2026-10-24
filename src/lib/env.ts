@@ -13,6 +13,15 @@ const baseEnvSchema = z.object({
   MAX_DOCUMENT_PAGES: z.coerce.number().int().positive().default(1000),
   CHUNK_SIZE_WORDS: z.coerce.number().int().positive().default(700),
   CHUNK_OVERLAP_WORDS: z.coerce.number().int().min(0).default(100),
+  // DOCX has no stored pagination, so it's converted to PDF via headless LibreOffice
+  // before reusing the existing PDF page-extraction pipeline unchanged. This bounds how
+  // long one conversion may run before being treated as a failure.
+  DOCX_CONVERT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  // Path or bare command for the LibreOffice CLI. Default "soffice" works out of the
+  // box after `apt install libreoffice` or `brew install --cask libreoffice` (both
+  // verified to put it on PATH — see README "Prasyarat"). Override only if some other
+  // install method doesn't, e.g. a direct path to the app bundle.
+  SOFFICE_BINARY: z.string().min(1).default("soffice"),
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   EMBEDDING_MODEL: z.string().min(1).default("nomic-embed-text"),
   OLLAMA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
@@ -92,6 +101,8 @@ export type Env = {
   MAX_DOCUMENT_PAGES: number;
   CHUNK_SIZE_WORDS: number;
   CHUNK_OVERLAP_WORDS: number;
+  DOCX_CONVERT_TIMEOUT_MS: number;
+  SOFFICE_BINARY: string;
   OLLAMA_BASE_URL: string;
   EMBEDDING_MODEL: string;
   OLLAMA_REQUEST_TIMEOUT_MS: number;
@@ -129,6 +140,8 @@ function loadEnv(): Env {
     MAX_DOCUMENT_PAGES: process.env.MAX_DOCUMENT_PAGES,
     CHUNK_SIZE_WORDS: process.env.CHUNK_SIZE_WORDS,
     CHUNK_OVERLAP_WORDS: process.env.CHUNK_OVERLAP_WORDS,
+    DOCX_CONVERT_TIMEOUT_MS: process.env.DOCX_CONVERT_TIMEOUT_MS,
+    SOFFICE_BINARY: process.env.SOFFICE_BINARY,
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
     OLLAMA_REQUEST_TIMEOUT_MS: process.env.OLLAMA_REQUEST_TIMEOUT_MS,

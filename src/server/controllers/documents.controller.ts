@@ -13,11 +13,13 @@ import { recordAuditEvent } from "@/server/repositories/audit-event.repository";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
 import { getDocumentPage } from "@/server/usecases/documents/get-document-page.usecase";
 import {
+  CorruptDocxError,
   CorruptPdfError,
   DocumentNotFoundError,
   DuplicateDocumentError,
   FileTooLargeError,
   InvalidFileError,
+  LibreOfficeUnavailableError,
   PageNotFoundError,
   SelfSupersedeError,
   TooManyPagesError,
@@ -74,7 +76,7 @@ export async function postDocument(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return jsonError(400, "Field 'file' wajib diisi dengan satu file PDF.");
+    return jsonError(400, "Field 'file' wajib diisi dengan satu file PDF atau DOCX.");
   }
 
   const metadataResult = uploadDocumentMetadataSchema.safeParse({
@@ -119,8 +121,15 @@ export async function postDocument(request: Request) {
     if (error instanceof InvalidFileError || error instanceof FileTooLargeError) {
       return jsonError(400, error.message);
     }
-    if (error instanceof CorruptPdfError || error instanceof TooManyPagesError) {
+    if (
+      error instanceof CorruptPdfError ||
+      error instanceof CorruptDocxError ||
+      error instanceof TooManyPagesError
+    ) {
       return jsonError(422, error.message);
+    }
+    if (error instanceof LibreOfficeUnavailableError) {
+      return jsonError(503, error.message);
     }
     if (error instanceof DuplicateDocumentError) {
       return NextResponse.json(
@@ -270,8 +279,15 @@ export async function postReprocessDocument(_request: Request, context: RouteCon
     if (error instanceof DocumentNotFoundError) {
       return jsonError(404, error.message);
     }
-    if (error instanceof CorruptPdfError || error instanceof TooManyPagesError) {
+    if (
+      error instanceof CorruptPdfError ||
+      error instanceof CorruptDocxError ||
+      error instanceof TooManyPagesError
+    ) {
       return jsonError(422, error.message);
+    }
+    if (error instanceof LibreOfficeUnavailableError) {
+      return jsonError(503, error.message);
     }
     throw error;
   }

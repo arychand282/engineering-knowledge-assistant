@@ -36,6 +36,18 @@ Endpoint API berada di bawah `/api/v1/...` dan mengikuti pemisahan layer
 - Node.js 20+ (direkomendasikan 22+)
 - npm 10+
 - Docker + Docker Compose (untuk PostgreSQL + pgvector)
+- **Opsional** (hanya untuk upload DOCX): LibreOffice terinstal. Upload PDF tidak
+  membutuhkan ini sama sekali. Instalasi:
+  - Debian/Ubuntu: `apt install libreoffice`
+  - macOS: `brew install --cask libreoffice`
+  - Keduanya terverifikasi menaruh `soffice` di PATH secara otomatis (lewat Homebrew
+    command wrapper di macOS) — default `SOFFICE_BINARY=soffice` bekerja langsung tanpa
+    konfigurasi tambahan pada kedua OS ini. Kalau instalasi lain tidak menaruhnya di
+    PATH, set `SOFFICE_BINARY` di `.env.local` ke path lengkapnya, mis.
+    `/Applications/LibreOffice.app/Contents/MacOS/soffice`.
+  - Tanpa LibreOffice (atau `SOFFICE_BINARY` salah), upload DOCX gagal dengan error
+    jelas (`503`, menyebutkan path/perintah yang dicoba) — bukan kegagalan diam-diam.
+    Upload PDF tidak terpengaruh sama sekali.
 
 ## Setup
 
@@ -152,6 +164,17 @@ curl -b cookies.txt -X POST http://localhost:3000/api/v1/documents \
   -F "revision=0" \
   -F "file=@/path/ke/dokumen.pdf;type=application/pdf"
 ```
+
+**DOCX juga didukung** (`-F "file=@/path/ke/dokumen.docx;type=application/vnd.openxmlformats-officedocument.wordprocessingml.document"`).
+DOCX tidak punya pagination tersimpan di dalam formatnya sendiri — nomor halaman
+bergantung pada rendering (font, margin, dll.), bukan sesuatu yang dicatat filenya.
+Supaya kutipan tetap berdasarkan nomor halaman yang nyata (bukan perkiraan/karangan),
+file DOCX dikonversi ke PDF lewat **LibreOffice headless** (`soffice --headless
+--convert-to pdf`) terlebih dulu, lalu diproses lewat pipeline PDF yang sama persis.
+File ASLI yang diunggah tetap yang disimpan (`storageKey`/`mimeType` tetap DOCX) — PDF
+hasil konversi hanya dipakai sesaat untuk ekstraksi teks, tidak pernah disimpan sebagai
+pengganti. Tanpa LibreOffice terinstal, upload DOCX gagal dengan `503` yang jelas
+("LibreOffice tidak ditemukan"); upload PDF tidak terpengaruh sama sekali.
 
 Endpoint lain yang tersedia: `GET /api/v1/documents` (daftar + pagination/filter),
 `GET /api/v1/documents/:id` (detail + status ekstraksi per halaman),
@@ -508,6 +531,12 @@ cookies.txt` disertakan di permintaan berikutnya.
   ekstraksi, bukan render visual halaman PDF.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
   operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
+- **Upload DOCX butuh LibreOffice terinstal di server** (`soffice` di PATH, lihat
+  "Prasyarat") — satu dependency sistem tambahan, bukan hanya package npm. Nomor
+  halaman hasil konversi DOCX→PDF mengikuti pagination hasil render LibreOffice, yang
+  bisa sedikit berbeda dari Microsoft Word untuk dokumen dengan formatting rumit
+  (tabel, kolom, header/footer kompleks) — belum diuji secara sistematis lintas jenis
+  formatting DOCX, hanya diverifikasi untuk dokumen teks sederhana.
 - Chunking memakai perkiraan jumlah kata sebagai proksi token (bukan tokenizer LLM
   sungguhan) dan belum mendeteksi heading/tabel/daftar bernomor secara khusus.
 - Model embedding (`nomic-embed-text`, 768 dimensi) dan model chat (`qwen2.5:3b-instruct`)

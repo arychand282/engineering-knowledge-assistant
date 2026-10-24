@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildStorageKey, computeSha256, hasPdfMagicBytes } from "@/lib/documents/metadata";
+import {
+  DOCX_MIME_TYPE,
+  PDF_MIME_TYPE,
+  buildStorageKey,
+  computeSha256,
+  hasPdfMagicBytes,
+  resolveSupportedDocumentFormat,
+} from "@/lib/documents/metadata";
+
+const ZIP_BYTES = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00]);
 
 describe("hasPdfMagicBytes", () => {
   it("accepts a buffer starting with %PDF-", () => {
@@ -9,6 +18,32 @@ describe("hasPdfMagicBytes", () => {
   it("rejects a buffer without the PDF magic bytes", () => {
     expect(hasPdfMagicBytes(Buffer.from("not a pdf at all"))).toBe(false);
     expect(hasPdfMagicBytes(Buffer.alloc(0))).toBe(false);
+  });
+});
+
+describe("resolveSupportedDocumentFormat", () => {
+  it("accepts a PDF: correct MIME type and magic bytes", () => {
+    expect(resolveSupportedDocumentFormat(PDF_MIME_TYPE, Buffer.from("%PDF-1.4\n..."))).toBe("pdf");
+  });
+
+  it("accepts a DOCX: correct MIME type and ZIP magic bytes", () => {
+    expect(resolveSupportedDocumentFormat(DOCX_MIME_TYPE, ZIP_BYTES)).toBe("docx");
+  });
+
+  it("rejects a PDF MIME type whose content isn't actually a PDF", () => {
+    expect(resolveSupportedDocumentFormat(PDF_MIME_TYPE, Buffer.from("not a pdf"))).toBeNull();
+  });
+
+  it("rejects a DOCX MIME type whose content isn't actually a ZIP", () => {
+    expect(resolveSupportedDocumentFormat(DOCX_MIME_TYPE, Buffer.from("not a zip"))).toBeNull();
+  });
+
+  it("rejects a real PDF file whose declared MIME type claims DOCX", () => {
+    expect(resolveSupportedDocumentFormat(DOCX_MIME_TYPE, Buffer.from("%PDF-1.4\n..."))).toBeNull();
+  });
+
+  it("rejects an unsupported MIME type entirely", () => {
+    expect(resolveSupportedDocumentFormat("text/plain", Buffer.from("plain text"))).toBeNull();
   });
 });
 
@@ -29,10 +64,14 @@ describe("computeSha256", () => {
 
 describe("buildStorageKey", () => {
   it("generates a unique internal path, never based on user input", () => {
-    const a = buildStorageKey();
-    const b = buildStorageKey();
+    const a = buildStorageKey("pdf");
+    const b = buildStorageKey("pdf");
 
     expect(a).not.toBe(b);
     expect(a).toMatch(/^documents\/[0-9a-f-]{36}\.pdf$/);
+  });
+
+  it("uses the given extension, matching the actual stored format", () => {
+    expect(buildStorageKey("docx")).toMatch(/^documents\/[0-9a-f-]{36}\.docx$/);
   });
 });

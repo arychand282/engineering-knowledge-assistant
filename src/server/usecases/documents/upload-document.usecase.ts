@@ -1,5 +1,9 @@
-import { extractPdfPages } from "@/lib/documents/extract-pdf";
-import { buildStorageKey, computeSha256, hasPdfMagicBytes } from "@/lib/documents/metadata";
+import { extractDocumentPages } from "@/lib/documents/extract-document";
+import {
+  buildStorageKey,
+  computeSha256,
+  resolveSupportedDocumentFormat,
+} from "@/lib/documents/metadata";
 import { env } from "@/lib/env";
 import { deleteStoredFile, saveFile } from "@/lib/storage/local-storage";
 import type { UploadDocumentMetadata } from "@/server/dto/documents.dto";
@@ -28,7 +32,8 @@ export interface UploadDocumentResult {
 export async function uploadDocument(input: UploadDocumentInput): Promise<UploadDocumentResult> {
   const { file, metadata, uploadedBy } = input;
 
-  if (file.mimeType !== "application/pdf" || !hasPdfMagicBytes(file.buffer)) {
+  const format = resolveSupportedDocumentFormat(file.mimeType, file.buffer);
+  if (!format) {
     throw new InvalidFileError();
   }
 
@@ -44,12 +49,13 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Upload
   }
 
   // Parse before persisting anything — an unparseable/oversized file never creates a
-  // document row or a stored file (CorruptPdfError / TooManyPagesError propagate here).
-  const extractedPages = await extractPdfPages(new Uint8Array(file.buffer), {
+  // document row or a stored file (CorruptPdfError/CorruptDocxError/TooManyPagesError
+  // propagate here).
+  const extractedPages = await extractDocumentPages(file.buffer, file.mimeType, {
     maxPages: env.MAX_DOCUMENT_PAGES,
   });
 
-  const storageKey = buildStorageKey();
+  const storageKey = buildStorageKey(format);
   await saveFile(storageKey, file.buffer);
 
   try {

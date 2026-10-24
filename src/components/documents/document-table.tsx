@@ -76,7 +76,8 @@ export function DocumentTable({
     const original = toDraft(doc);
     const patch: Partial<EditDraft> = {};
     if (draft.title !== original.title) patch.title = draft.title;
-    if (draft.documentNumber !== original.documentNumber) patch.documentNumber = draft.documentNumber;
+    if (draft.documentNumber !== original.documentNumber)
+      patch.documentNumber = draft.documentNumber;
     if (draft.documentType !== original.documentType) patch.documentType = draft.documentType;
     if (draft.revision !== original.revision) patch.revision = draft.revision;
     if (draft.status !== original.status) patch.status = draft.status;
@@ -188,7 +189,9 @@ export function DocumentTable({
                         </button>
                       </div>
                       {rowError ? (
-                        <p className="max-w-48 text-xs text-red-700 dark:text-red-400">{rowError}</p>
+                        <p className="max-w-48 text-xs text-red-700 dark:text-red-400">
+                          {rowError}
+                        </p>
                       ) : null}
                     </div>
                   </td>

@@ -131,7 +131,7 @@ Semua target harus diukur menggunakan dataset pertanyaan yang ditinjau engineer/
 | Model awal | Model instruct open-weight yang sesuai dan disetujui | Pemilihan final harus melalui benchmark bahasa Indonesia dan lisensi |
 | Embedding | Model embedding yang berjalan lokal via Ollama atau runtime lokal lain | Dokumen tidak dikirim ke layanan embedding cloud |
 | PDF parsing | `pdfjs-dist` atau parser PDF Node.js yang dapat mengeluarkan teks per halaman | Menjaga referensi halaman |
-| DOCX parsing | Ditunda atau dikonversi melalui pipeline terkontrol | Pagination DOCX tidak stabil tanpa layout/rendering |
+| DOCX parsing | **Diimplementasikan**: dikonversi ke PDF lewat LibreOffice headless (`soffice --headless --convert-to pdf`), lalu memakai pipeline PDF yang sama apa adanya | DOCX tidak punya pagination tersimpan — konversi lewat rendering nyata menghasilkan nomor halaman asli, bukan perkiraan/karangan (lihat §7 Tahap 2 dan `src/lib/documents/convert-docx.ts`). Menambah LibreOffice sebagai dependency sistem opsional (lihat README). |
 | Validasi input | Zod | Validasi payload API |
 | Auth | Auth.js atau solusi session yang dipilih setelah pemeriksaan kompatibilitas | Session dan role pengguna |
 | Testing | Vitest + Playwright | Unit/integration dan end-to-end |
@@ -1049,7 +1049,9 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 ### Fase lanjutan setelah prototype
 
 - OCR lokal untuk PDF scan.
-- DOCX dan format tambahan.
+- ~~DOCX dan format tambahan.~~ **DOCX diimplementasikan** (via konversi LibreOffice,
+  lihat §3 "Stack" baris DOCX parsing dan README "Mengunggah dokumen"). Format tambahan
+  lain (mis. gambar, email) masih belum.
 - Review/approval workflow untuk status dokumen.
 - Konflik lintas dokumen yang lebih sistematis.
 - ~~Reranker lokal.~~ **Diimplementasikan** (LLM-rerank via Ollama, opt-in
@@ -1088,7 +1090,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(106 unit + 62 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(115 unit + 65 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

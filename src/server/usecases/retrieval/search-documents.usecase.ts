@@ -72,7 +72,11 @@ export async function searchDocuments(input: SearchDocumentsInput): Promise<Sear
   let vectorSearchAvailable = true;
   try {
     const [queryEmbedding] = await embedTexts([input.query]);
-    vectorResults = await searchChunksByVector(queryEmbedding, accessibleDocumentIds, candidateLimit);
+    vectorResults = await searchChunksByVector(
+      queryEmbedding,
+      accessibleDocumentIds,
+      candidateLimit,
+    );
   } catch (error) {
     if (
       error instanceof OllamaUnavailableError ||

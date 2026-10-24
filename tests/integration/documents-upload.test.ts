@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/lib/db";
+import { DOCX_MIME_TYPE } from "@/lib/documents/metadata";
 import { documentChunks, documentPages, documents, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { deleteStoredFile, readStoredFile } from "@/lib/storage/local-storage";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
 import {
+  CorruptDocxError,
   CorruptPdfError,
   DocumentNotFoundError,
   DuplicateDocumentError,
@@ -16,6 +18,7 @@ import {
 } from "@/server/usecases/documents/errors";
 import { reprocessDocument } from "@/server/usecases/documents/reprocess-document.usecase";
 import { uploadDocument } from "@/server/usecases/documents/upload-document.usecase";
+import { buildGarbageZip, buildTestDocx } from "../helpers/build-test-docx";
 import { buildTestPdf } from "../helpers/build-test-pdf";
 
 let userId: string;
@@ -196,6 +199,45 @@ describe("uploadDocument (real DB + real local storage)", () => {
   });
 });
 
+describe("uploadDocument (DOCX via LibreOffice — requires soffice installed)", () => {
+  it("converts via LibreOffice and extracts real page text, storing the original .docx", async () => {
+    const docx = buildTestDocx(["Isi paragraf pertama untuk pengujian DOCX."]);
+
+    const result = await uploadDocument({
+      file: { buffer: docx, mimeType: DOCX_MIME_TYPE, originalFilename: "uji.docx" },
+      metadata: baseMetadata(),
+      uploadedBy: userId,
+    });
+    createdDocumentIds.push(result.document.id);
+
+    expect(result.document.storageKey).toMatch(/\.docx$/);
+    expect(result.document.mimeType).toBe(DOCX_MIME_TYPE);
+    expect(result.pageCount).toBeGreaterThanOrEqual(1);
+
+    // The ORIGINAL uploaded file is what's stored, not the converted PDF derivative.
+    const stored = await readStoredFile(result.document.storageKey);
+    expect(stored.equals(docx)).toBe(true);
+
+    const detail = await getDocument(result.document.id, managementActor());
+    expect(detail.pages[0].extractedText).toContain("Isi paragraf pertama untuk pengujian DOCX.");
+  }, 30_000);
+
+  it("rejects a ZIP with valid magic bytes but no real DOCX parts inside", async () => {
+    const garbage = buildGarbageZip();
+
+    await expect(
+      uploadDocument({
+        file: { buffer: garbage, mimeType: DOCX_MIME_TYPE, originalFilename: "rusak.docx" },
+        metadata: baseMetadata(),
+        uploadedBy: userId,
+      }),
+    ).rejects.toBeInstanceOf(CorruptDocxError);
+
+    const rows = await db.select().from(documents).where(eq(documents.uploadedBy, userId));
+    expect(rows).toHaveLength(0);
+  }, 30_000);
+});
+
 describe("reprocessDocument", () => {
   it("replaces pages/chunks for an existing document", async () => {
     const pdf = buildTestPdf([{ text: "Versi awal konten dokumen." }]);
@@ -221,4 +263,20 @@ describe("reprocessDocument", () => {
   it("throws DocumentNotFoundError for an unknown id", async () => {
     await expect(reprocessDocument(randomUUID())).rejects.toBeInstanceOf(DocumentNotFoundError);
   });
+
+  it("re-converts a DOCX-sourced document via LibreOffice again (requires soffice installed)", async () => {
+    const docx = buildTestDocx(["Versi awal paragraf DOCX."]);
+    const uploaded = await uploadDocument({
+      file: { buffer: docx, mimeType: DOCX_MIME_TYPE, originalFilename: "reprocess.docx" },
+      metadata: baseMetadata(),
+      uploadedBy: userId,
+    });
+    createdDocumentIds.push(uploaded.document.id);
+
+    const result = await reprocessDocument(uploaded.document.id);
+    expect(result.pageCount).toBeGreaterThanOrEqual(1);
+
+    const after = await getDocument(uploaded.document.id, managementActor());
+    expect(after.pages[0].extractedText).toContain("Versi awal paragraf DOCX.");
+  }, 30_000);
 });

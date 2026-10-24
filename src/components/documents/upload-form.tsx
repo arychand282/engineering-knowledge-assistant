@@ -88,7 +88,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       <input
         name="file"
         type="file"
-        accept="application/pdf"
+        accept="application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pdf,.docx"
         required
         className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
       />
@@ -97,7 +97,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
         disabled={submitting}
         className="w-fit rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
       >
-        {submitting ? "Mengunggah…" : "Unggah PDF"}
+        {submitting ? "Mengunggah…" : "Unggah PDF/DOCX"}
       </button>
 
       {error ? (

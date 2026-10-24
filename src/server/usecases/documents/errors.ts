@@ -1,7 +1,8 @@
 export { CorruptPdfError, TooManyPagesError } from "@/lib/documents/extract-pdf";
+export { CorruptDocxError, LibreOfficeUnavailableError } from "@/lib/documents/convert-docx";
 
 export class InvalidFileError extends Error {
-  constructor(message = "Hanya file PDF yang didukung.") {
+  constructor(message = "Hanya file PDF atau DOCX yang didukung.") {
     super(message);
     this.name = "InvalidFileError";
   }

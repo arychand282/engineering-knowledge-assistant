@@ -91,9 +91,13 @@ Eksternal").
 - Rate limiting bersifat in-memory per-proses, bukan terdistribusi.
 - Tombol "Edit" di `/documents` mengubah status/metadata inti saja (judul, nomor, tipe,
   revisi, status). Field lain (tanggal efektif, dokumen yang digantikan, proyek, cabang)
-  masih API-only. Belum ada endpoint pratinjau halaman.
+  masih API-only. `GET .../pages/:page` (pratinjau satu halaman) ada di backend tapi
+  belum ada tombol UI untuk memanggilnya.
 - Model embedding/chat dev saat ini adalah default sementara, bukan keputusan final
   yang sudah melalui benchmark bahasa Indonesia atau persetujuan lisensi.
+- Upload DOCX (selain PDF) butuh LibreOffice terinstal di server (`soffice` di PATH) —
+  tanpa itu, upload DOCX gagal dengan error jelas, bukan diam-diam; PDF tidak
+  terpengaruh. Lihat README "Prasyarat".
 
 Jangan membingkai ulang keterbatasan ini sebagai "fitur mendatang yang sudah pasti" —
 sebutkan sebagai apa adanya: belum dikerjakan, dan kenapa (lihat PLANNING.md §18 untuk

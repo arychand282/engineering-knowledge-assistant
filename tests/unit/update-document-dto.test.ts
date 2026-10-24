@@ -54,8 +54,8 @@ describe("updateDocumentSchema", () => {
   });
 
   it("accepts a valid uuid supersedesDocumentId", () => {
-    expect(
-      updateDocumentSchema.safeParse({ supersedesDocumentId: randomUUID() }).success,
-    ).toBe(true);
+    expect(updateDocumentSchema.safeParse({ supersedesDocumentId: randomUUID() }).success).toBe(
+      true,
+    );
   });
 });

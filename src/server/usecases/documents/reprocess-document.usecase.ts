@@ -1,4 +1,4 @@
-import { extractPdfPages } from "@/lib/documents/extract-pdf";
+import { extractDocumentPages } from "@/lib/documents/extract-document";
 import { env } from "@/lib/env";
 import { readStoredFile } from "@/lib/storage/local-storage";
 import { findDocumentById } from "@/server/repositories/document.repository";
@@ -22,7 +22,7 @@ export async function reprocessDocument(documentId: string): Promise<ReprocessDo
   }
 
   const fileBuffer = await readStoredFile(document.storageKey);
-  const extractedPages = await extractPdfPages(new Uint8Array(fileBuffer), {
+  const extractedPages = await extractDocumentPages(fileBuffer, document.mimeType, {
     maxPages: env.MAX_DOCUMENT_PAGES,
   });
 
