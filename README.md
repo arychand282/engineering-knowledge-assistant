@@ -94,7 +94,12 @@ Selain endpoint API di atas, ada UI minimal untuk memudahkan demo/manual testing
   di bawah untuk cara membuat akun dev).
 - `/` — halaman beranda dengan tautan ke Chat dan Dokumen.
 - `/documents` — unggah dokumen baru (form, hanya tampil untuk role `admin`/
-  `document_controller`) dan lihat daftar dokumen yang bisa diakses.
+  `document_controller`) dan lihat daftar dokumen yang bisa diakses, termasuk kolom
+  "Disetujui" (email + waktu, dari `approvedBy`/`approvedAt`). Klik judul dokumen untuk
+  membuka `/documents/:id` — detail dokumen (metadata, siapa yang menyetujui, status
+  ekstraksi tiap halaman termasuk badge OCR + confidence), tombol untuk melihat teks
+  tiap halaman (lazy-load lewat `GET .../pages/:page`), dan tombol "Proses ulang"
+  (role `admin`/`document_controller`, memanggil `POST .../reprocess`).
 - `/chat` — sidebar percakapan (buat baru/pilih/hapus) + thread chat, menampilkan status
   jawaban (`answered` / `insufficient_evidence` / `conflict_detected`) dan sumber kutipan
   per pesan.
@@ -559,20 +564,25 @@ cookies.txt` disertakan di permintaan berikutnya.
   berwenang) — tapi hanya untuk field inti (judul, nomor, tipe, revisi, status).
   `effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId` masih API-only, belum
   ada form untuk itu.
-- `GET /api/v1/documents/:id/pages/:page` (satu halaman: nomor, teks terekstrak, status
-  ekstraksi) ada di backend dan dipakai lewat API/curl, tapi belum ada UI untuk
-  memanggilnya (tidak ada tombol "lihat halaman" di `/documents`) — hanya teks hasil
-  ekstraksi, bukan render visual halaman PDF.
+- `GET /api/v1/documents/:id/pages/:page` punya UI di `/documents/:id` (klik baris
+  halaman untuk lazy-load dan menampilkan teksnya) — tapi hanya teks hasil ekstraksi,
+  bukan render visual halaman PDF.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
   operator gambar di halaman PDF, bukan analisis sempurna. OCR otomatis SUDAH ada
   (`OCR_ENABLED`, lihat "Mengunggah dokumen") tapi dengan keterbatasan jujur: hanya
   diverifikasi dengan gambar teks yang jelas/kontras tinggi (bukan hasil scan fisik
   sungguhan dengan noise/kemiringan/kualitas rendah); `OCR_MIN_CONFIDENCE=60` adalah
-  nilai awal yang wajar, belum dibenchmark terhadap dataset dokumen scan nyata; dan
-  belum ada UI yang menunjukkan ke pengguna bahwa suatu kutipan berasal dari OCR
-  (kurang bisa dipercaya dibanding teks asli) — `isOcr`/`ocrConfidence` tersimpan di
-  `document_pages` dan sudah muncul di respons API, tapi belum ditampilkan khusus di
-  kartu sumber chat atau UI dokumen.
+  nilai awal yang wajar, belum dibenchmark terhadap dataset dokumen scan nyata.
+  `isOcr`/`ocrConfidence` ditampilkan sebagai badge per halaman di `/documents/:id`,
+  tapi **belum** di kartu sumber chat — jawaban chat yang mengutip halaman hasil OCR
+  terlihat sama seperti kutipan dari teks asli, tidak ditandai kurang bisa dipercaya.
+- **Memproses ulang dokumen (`POST .../reprocess`, tombol "Proses ulang" di
+  `/documents/:id`) menghapus kutipan sumber pada pesan chat lama** yang pernah mengutip
+  dokumen itu — ditemukan sebagai bug nyata (FK violation/500) saat fitur UI-nya
+  dibangun, diperbaiki dengan mengubah `message_sources.chunk_id` dari `ON DELETE
+RESTRICT` ke `CASCADE` (chunk lama memang terhapus saat reprocess, jadi kutipan ke
+  chunk itu memang sudah tidak valid). Teks jawaban pesan lama tetap utuh — hanya kartu
+  sumbernya yang hilang dari tampilan riwayat chat.
 - **Upload DOCX butuh LibreOffice terinstal di server** (`soffice` di PATH, lihat
   "Prasyarat") — satu dependency sistem tambahan, bukan hanya package npm. Nomor
   halaman hasil konversi DOCX→PDF mengikuti pagination hasil render LibreOffice, yang

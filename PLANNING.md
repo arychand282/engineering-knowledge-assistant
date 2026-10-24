@@ -907,7 +907,10 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
    - Status pemrosesan.
    - Tampilkan error ekstraksi dan kebutuhan OCR.
 
-5. **Detail Dokumen**
+5. **Detail Dokumen** — **Diimplementasikan** (`/documents/:id`): metadata, status,
+   revisi, siapa yang menyetujui, status ekstraksi + badge OCR per halaman (lazy-load
+   teks per halaman), tombol proses ulang (role `admin`/`document_controller`). Belum
+   ada aksi "publikasi" terpisah dari mengubah status lewat tombol Edit di tabel.
    - Metadata, status, revisi, halaman yang berhasil diekstrak.
    - Aksi publikasi/reprocess sesuai role.
 
@@ -1105,7 +1108,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(115 unit + 76 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(115 unit + 78 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

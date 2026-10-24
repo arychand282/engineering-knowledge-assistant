@@ -3,7 +3,15 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/lib/db";
 import { DOCX_MIME_TYPE } from "@/lib/documents/metadata";
-import { documentChunks, documentPages, documents, users } from "@/lib/db/schema";
+import {
+  conversations,
+  documentChunks,
+  documentPages,
+  documents,
+  messageSources,
+  messages,
+  users,
+} from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { deleteStoredFile, readStoredFile } from "@/lib/storage/local-storage";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
@@ -262,6 +270,64 @@ describe("reprocessDocument", () => {
 
   it("throws DocumentNotFoundError for an unknown id", async () => {
     await expect(reprocessDocument(randomUUID())).rejects.toBeInstanceOf(DocumentNotFoundError);
+  });
+
+  it("reprocesses a document that was already cited in a chat answer (real bug: FK violation deleting its old chunks)", async () => {
+    const pdf = buildTestPdf([{ text: "Konten yang akan dikutip di chat." }]);
+    const uploaded = await uploadDocument({
+      file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "cited.pdf" },
+      metadata: baseMetadata(),
+      uploadedBy: userId,
+    });
+    createdDocumentIds.push(uploaded.document.id);
+
+    const [chunk] = await db
+      .select()
+      .from(documentChunks)
+      .where(eq(documentChunks.documentId, uploaded.document.id));
+
+    const [conversation] = await db.insert(conversations).values({ userId }).returning();
+    await db
+      .insert(messages)
+      .values({ conversationId: conversation.id, role: "user", content: "Pertanyaan uji" });
+    const [assistantMessage] = await db
+      .insert(messages)
+      .values({
+        conversationId: conversation.id,
+        role: "assistant",
+        content: "Jawaban yang mengutip dokumen ini.",
+        answerStatus: "answered",
+      })
+      .returning();
+    await db.insert(messageSources).values({
+      messageId: assistantMessage.id,
+      documentId: uploaded.document.id,
+      chunkId: chunk.id,
+      pageNumber: 1,
+      quotedText: "Konten yang akan dikutip di chat.",
+    });
+
+    // Before the fix: deleteChunksByDocumentId() inside reprocessDocument() threw a
+    // Postgres FK violation here (message_sources.chunk_id was ON DELETE RESTRICT).
+    await expect(reprocessDocument(uploaded.document.id)).resolves.toMatchObject({
+      chunkCount: 1,
+    });
+
+    // The message's own text is untouched — only its structured source citation is
+    // gone (cascaded away with the chunk it pointed at, which no longer exists).
+    const [reloadedMessage] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, assistantMessage.id));
+    expect(reloadedMessage.content).toBe("Jawaban yang mengutip dokumen ini.");
+    const remainingSources = await db
+      .select()
+      .from(messageSources)
+      .where(eq(messageSources.messageId, assistantMessage.id));
+    expect(remainingSources).toHaveLength(0);
+
+    await db.delete(messages).where(eq(messages.conversationId, conversation.id));
+    await db.delete(conversations).where(eq(conversations.id, conversation.id));
   });
 
   it("re-converts a DOCX-sourced document via LibreOffice again (requires soffice installed)", async () => {

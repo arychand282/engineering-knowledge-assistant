@@ -1,18 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
+import { STATUS_LABELS, STATUS_OPTIONS } from "./status-labels";
 import type { DocumentRowView } from "./types";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  effective: "Efektif",
-  superseded: "Digantikan",
-  obsolete: "Usang",
-  under_review: "Ditinjau",
-};
-
-const STATUS_OPTIONS = Object.keys(STATUS_LABELS);
 
 interface EditDraft {
   title: string;
@@ -217,7 +209,11 @@ export function DocumentTable({
                 </>
               ) : (
                 <>
-                  <td className="py-2 pr-3">{doc.title}</td>
+                  <td className="py-2 pr-3">
+                    <Link href={`/documents/${doc.id}`} className="hover:underline">
+                      {doc.title}
+                    </Link>
+                  </td>
                   <td className="py-2 pr-3">{doc.documentNumber}</td>
                   <td className="py-2 pr-3">{doc.documentType}</td>
                   <td className="py-2 pr-3">{doc.revision}</td>
