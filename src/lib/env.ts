@@ -24,6 +24,24 @@ const baseEnvSchema = z.object({
   // production SLA.
   OLLAMA_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
   CHAT_RETRIEVAL_LIMIT: z.coerce.number().int().positive().default(6),
+
+  // OPT-IN, default OFF — Ollama has no native cross-encoder/rerank model, so the only
+  // local option is one extra chat-model call that scores/reorders candidates before
+  // the final CHAT_RETRIEVAL_LIMIT is taken. This roughly doubles chat latency per
+  // question when on, which matters a lot on CPU-only hardware (see
+  // OLLAMA_CHAT_TIMEOUT_MS above) — default stays false so nothing changes unless
+  // explicitly configured. Always local (Ollama) regardless of CHAT_PROVIDER: wiring a
+  // second structured-output schema through every external provider client was out of
+  // scope for what's meant to be an optional quality improvement, not a core feature.
+  RERANK_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+  // How many candidates (per search type, before merging) are retrieved for the
+  // reranker to choose from — only used when RERANK_ENABLED=true, where it replaces
+  // CHAT_RETRIEVAL_LIMIT as the retrieval width; the final answer still only uses
+  // CHAT_RETRIEVAL_LIMIT chunks, now picked by the reranker instead of RRF fusion alone.
+  RERANK_CANDIDATE_LIMIT: z.coerce.number().int().positive().default(20),
   // Prior turns (user+assistant messages) included in the prompt so the model can
   // follow up on its own earlier answers. Counts messages, not tokens — a long answer
   // still counts as one. Tune down if context windows get too large for the chat model.
@@ -81,6 +99,8 @@ export type Env = {
   OLLAMA_CHAT_TIMEOUT_MS: number;
   CHAT_RETRIEVAL_LIMIT: number;
   CHAT_HISTORY_LIMIT: number;
+  RERANK_ENABLED: boolean;
+  RERANK_CANDIDATE_LIMIT: number;
   CHAT_PROVIDER: "local" | "gemini" | "openai" | "anthropic";
   EXTERNAL_CHAT_TIMEOUT_MS: number;
   GEMINI_API_KEY?: string;
@@ -116,6 +136,8 @@ function loadEnv(): Env {
     OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
     CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
     CHAT_HISTORY_LIMIT: process.env.CHAT_HISTORY_LIMIT,
+    RERANK_ENABLED: process.env.RERANK_ENABLED,
+    RERANK_CANDIDATE_LIMIT: process.env.RERANK_CANDIDATE_LIMIT,
     CHAT_PROVIDER: process.env.CHAT_PROVIDER,
     EXTERNAL_CHAT_TIMEOUT_MS: process.env.EXTERNAL_CHAT_TIMEOUT_MS,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,

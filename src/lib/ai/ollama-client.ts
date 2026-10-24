@@ -78,9 +78,11 @@ export interface ChatMessage {
 }
 
 /**
- * Sends a chat completion request with the structured-output `format` set to our answer
- * JSON Schema (PLANNING.md #8: model must return structured JSON). Returns the raw
- * response text — schema validation with Zod happens in the usecase layer, not here.
+ * Sends a chat completion request with the structured-output `format` set to the given
+ * JSON Schema (PLANNING.md #8: model must return structured JSON) — defaults to our
+ * answer schema, the only shape every existing caller needs; the rerank usecase is the
+ * one caller that passes its own schema. Returns the raw response text — schema
+ * validation with Zod happens in the usecase layer, not here.
  *
  * Uses `stream: true` (NDJSON), not `stream: false` — found via real Task 7 evaluation
  * that a non-streaming request sends ZERO bytes until generation fully finishes, which
@@ -92,7 +94,10 @@ export interface ChatMessage {
  * reason. We still only need the fully-assembled string, not real token streaming to a
  * frontend.
  */
-export async function generateChatCompletion(messages: ChatMessage[]): Promise<string> {
+export async function generateChatCompletion(
+  messages: ChatMessage[],
+  format: object = llmAnswerJsonSchema,
+): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.OLLAMA_CHAT_TIMEOUT_MS);
 
@@ -105,7 +110,7 @@ export async function generateChatCompletion(messages: ChatMessage[]): Promise<s
         model: env.CHAT_MODEL,
         messages,
         stream: true,
-        format: llmAnswerJsonSchema,
+        format,
       }),
       signal: controller.signal,
     });

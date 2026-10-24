@@ -222,6 +222,36 @@ percakapan — pencarian dokumen (`searchDocuments`) tetap hanya memakai teks pe
 terbaru apa adanya, jadi pertanyaan lanjutan yang kata kuncinya tidak tumpang tindih
 dengan isi dokumen tetap bisa gagal retrieval meski modelnya sudah "ingat" konteksnya.
 
+### Reranker lokal (opsional, `RERANK_ENABLED`, default `false`)
+
+Retrieval hybrid (full-text + vector, digabung lewat Reciprocal Rank Fusion) bisa
+ditingkatkan dengan satu langkah reranking tambahan: `RERANK_ENABLED=true` membuat
+backend mengambil kandidat lebih banyak (`RERANK_CANDIDATE_LIMIT`, default 20) lalu
+meminta model chat **lokal** (selalu Ollama via `CHAT_MODEL`, **terlepas dari**
+`CHAT_PROVIDER`) menilai relevansi tiap kandidat sebelum `CHAT_RETRIEVAL_LIMIT` diambil
+untuk dijawab.
+
+```bash
+# .env.local
+RERANK_ENABLED=true
+RERANK_CANDIDATE_LIMIT=20
+```
+
+Yang perlu diketahui sebelum mengaktifkan:
+
+- **Ollama tidak punya model cross-encoder/rerank asli** — ini LLM-rerank (satu
+  panggilan `CHAT_MODEL` ekstra yang menilai skor 0–10 per kandidat), bukan model
+  khusus rerank. Kira-kira **melipatgandakan latensi** chat per pertanyaan.
+- **Selalu lokal, berapa pun `CHAT_PROVIDER`.** Kalau `RERANK_ENABLED=true` tapi
+  `CHAT_PROVIDER` diisi provider eksternal (`gemini`/`openai`/`anthropic`), reranking
+  **dilewati** (bukan diam-diam dikirim ke provider eksternal itu) — server log mencatat
+  peringatan sekali. Artinya `CHAT_MODEL` (`qwen2.5:3b-instruct` secara default) harus
+  sudah di-pull di Ollama (`npm run ai:pull-chat-model`) walau Anda memakai
+  `CHAT_PROVIDER` eksternal untuk jawaban akhir.
+- **Gagal dengan aman:** jika model tidak terjangkau atau responsnya tidak bisa
+  divalidasi, hasil retrieval kembali ke urutan RRF semula — reranking tidak pernah
+  menggagalkan pertanyaan secara keseluruhan.
+
 Alur `askQuestion` (`src/server/usecases/chat/ask-question.usecase.ts`) mengikuti urutan
 di PLANNING.md §8: retrieval dengan filter akses dulu → jika tidak ada bukti sama sekali,
 `insufficient_evidence` **tanpa** memanggil model → jika ditemukan dokumen yang saling

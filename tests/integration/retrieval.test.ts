@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { embedTexts } from "@/lib/ai/ollama-client";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/ai/ollama-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/ollama-client")>();
+  return { ...actual, generateChatCompletion: vi.fn(actual.generateChatCompletion) };
+});
+
+import { embedTexts, generateChatCompletion } from "@/lib/ai/ollama-client";
 import { db, pool } from "@/lib/db";
 import {
   documentAccess,
@@ -11,7 +17,14 @@ import {
   userRoles,
   users,
 } from "@/lib/db/schema";
+import { env } from "@/lib/env";
 import { searchDocuments } from "@/server/usecases/retrieval/search-documents.usecase";
+
+const mockedGenerateChatCompletion = vi.mocked(generateChatCompletion);
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 /**
  * Requires: `npm run db:up`, `npm run ai:up`, `npm run ai:pull-embedding-model`, and
@@ -186,5 +199,77 @@ describe("searchDocuments", () => {
 
     expect(result.results).toEqual([]);
     expect(result.vectorSearchAvailable).toBe(false);
+  });
+
+  it("never calls the reranker when RERANK_ENABLED is off (the default)", async () => {
+    const result = await searchDocuments({
+      query: "keselamatan boiler tekanan tinggi",
+      userId: userGrantedId,
+    });
+
+    expect(result.reranked).toBe(false);
+    expect(mockedGenerateChatCompletion).not.toHaveBeenCalled();
+  });
+});
+
+describe("searchDocuments with RERANK_ENABLED", () => {
+  const originalRerankEnabled = env.RERANK_ENABLED;
+  const originalChatProvider = env.CHAT_PROVIDER;
+
+  afterEach(() => {
+    env.RERANK_ENABLED = originalRerankEnabled;
+    env.CHAT_PROVIDER = originalChatProvider;
+  });
+
+  it("reorders results using the reranker's relevance scores", async () => {
+    env.RERANK_ENABLED = true;
+    env.CHAT_PROVIDER = "local";
+
+    // Without reranking, docA's chunk wins this query (asserted in the sibling test
+    // above). The mock gives the LAST-listed candidate the highest score — since docA
+    // naturally ranks first (so is listed first), this forces a real order flip: docC
+    // must win instead, proving the final order actually came from the reranker.
+    mockedGenerateChatCompletion.mockImplementationOnce(async (messages) => {
+      const prompt = messages[messages.length - 1].content;
+      const chunkIdMatches = [...prompt.matchAll(/\[chunk:([0-9a-f-]+)\]/g)].map((m) => m[1]);
+      const ranking = chunkIdMatches.map((chunk_id, index) => ({ chunk_id, relevance: index }));
+      return JSON.stringify({ ranking });
+    });
+
+    const result = await searchDocuments({
+      query: "keselamatan boiler tekanan tinggi",
+      userId: userGrantedId,
+    });
+
+    expect(mockedGenerateChatCompletion).toHaveBeenCalledTimes(1);
+    expect(result.reranked).toBe(true);
+    expect(result.results[0].documentId).toBe(docCId);
+  });
+
+  it("falls back to the original (unreranked) order when the model returns malformed JSON", async () => {
+    env.RERANK_ENABLED = true;
+    env.CHAT_PROVIDER = "local";
+    mockedGenerateChatCompletion.mockResolvedValueOnce("not valid json");
+
+    const result = await searchDocuments({
+      query: "keselamatan boiler tekanan tinggi",
+      userId: userGrantedId,
+    });
+
+    expect(result.reranked).toBe(false);
+    expect(result.results[0].documentId).toBe(docAId); // same winner as the non-rerank test
+  });
+
+  it("skips reranking entirely when CHAT_PROVIDER is not local", async () => {
+    env.RERANK_ENABLED = true;
+    env.CHAT_PROVIDER = "gemini";
+
+    const result = await searchDocuments({
+      query: "keselamatan boiler tekanan tinggi",
+      userId: userGrantedId,
+    });
+
+    expect(result.reranked).toBe(false);
+    expect(mockedGenerateChatCompletion).not.toHaveBeenCalled();
   });
 });

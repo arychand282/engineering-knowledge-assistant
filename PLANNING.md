@@ -587,7 +587,14 @@ Jangan memasukkan password, token, API key, isi dokumen sensitif, atau prompt le
 3. Buat audit event yang sesuai.
 4. Ambil hanya dokumen yang boleh diakses pengguna.
 5. Jalankan pencarian hybrid: full-text search PostgreSQL dan vector similarity jika layak.
-6. Ambil kandidat chunk dan lakukan deduplikasi.
+6. Ambil kandidat chunk dan lakukan deduplikasi (Reciprocal Rank Fusion). **Opsional
+   (`RERANK_ENABLED`, default false):** satu panggilan model chat LOKAL tambahan
+   (selalu Ollama, terlepas dari `CHAT_PROVIDER` — lihat "Mode Chat Eksternal" di bawah)
+   menilai ulang relevansi kandidat sebelum `CHAT_RETRIEVAL_LIMIT` diambil. Kira-kira
+   melipatgandakan latensi chat per pertanyaan — nonaktif secara default justru karena
+   latensi CPU-only sudah jadi masalah nyata (lihat keputusan §18 #6). Gagal dengan
+   aman: kembali ke urutan RRF asli bila model tidak terjangkau atau responsnya tidak
+   valid, tidak pernah menggagalkan seluruh alur tanya-jawab.
 7. Terapkan aturan status/revisi/hierarki dokumen yang sudah disepakati.
 8. Periksa apakah retrieval cukup relevan. Threshold harus ditentukan melalui evaluasi, bukan angka asal.
 9. Jika bukti tidak cukup, kembalikan `insufficient_evidence` tanpa memaksa model menjawab.
@@ -661,7 +668,12 @@ Aturan wajib untuk mode ini:
    retrieval (pencarian dokumen) **tetap 100% lokal selalu**, tidak peduli nilai
    `CHAT_PROVIDER` — lihat `src/server/usecases/retrieval/search-documents.usecase.ts`
    dan `src/lib/ai/ollama-client.ts` (`embedTexts`), yang tidak dipengaruhi flag ini sama
-   sekali.
+   sekali. Ini termasuk reranker opsional (`RERANK_ENABLED`, langkah 6 di atas) — meski
+   memanggil model chat, itu bagian dari retrieval, bukan generasi jawaban, jadi selalu
+   lewat Ollama lokal (`src/lib/ai/rerank.ts`) walau `CHAT_PROVIDER` diisi provider
+   eksternal. Jika `RERANK_ENABLED=true` sementara `CHAT_PROVIDER` eksternal, reranking
+   dilewati (bukan diam-diam dialihkan ke provider eksternal) dan peringatan dicetak
+   sekali di server log.
 3. **Jangan dipakai dengan dokumen perusahaan sungguhan/rahasia** sampai ada kebijakan
    resmi perusahaan yang menyetujui vendor AI eksternal tertentu (lihat §18 keputusan 1
    dan 7). Mode ini hanya untuk demo dengan data dummy/uji, atau pengembangan lokal oleh
@@ -1040,7 +1052,11 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 - DOCX dan format tambahan.
 - Review/approval workflow untuk status dokumen.
 - Konflik lintas dokumen yang lebih sistematis.
-- Reranker lokal.
+- ~~Reranker lokal.~~ **Diimplementasikan** (LLM-rerank via Ollama, opt-in
+  `RERANK_ENABLED`, default false — lihat §8 langkah 6 dan "Mode Chat Eksternal" aturan
+  2). Bukan cross-encoder sungguhan (Ollama tidak punya model rerank asli) — satu
+  panggilan model chat tambahan yang menilai relevansi; latensi jadi pertimbangan,
+  bukan gratis.
 - WhatsApp Business Platform hanya setelah persetujuan keamanan.
 - SSO perusahaan.
 - Deployment internal/air-gapped.
@@ -1072,7 +1088,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(97 unit + 58 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(106 unit + 62 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.
