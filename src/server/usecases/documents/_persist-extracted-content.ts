@@ -30,6 +30,8 @@ export async function persistExtractedContent(
     pageNumber: page.pageNumber,
     extractedText: page.text.length > 0 ? page.text : null,
     extractionStatus: page.status,
+    isOcr: page.isOcr ?? false,
+    ocrConfidence: page.ocrConfidence ?? null,
   }));
   const pages = await insertPages(pageRows);
 

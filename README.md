@@ -48,6 +48,11 @@ Endpoint API berada di bawah `/api/v1/...` dan mengikuti pemisahan layer
   - Tanpa LibreOffice (atau `SOFFICE_BINARY` salah), upload DOCX gagal dengan error
     jelas (`503`, menyebutkan path/perintah yang dicoba) — bukan kegagalan diam-diam.
     Upload PDF tidak terpengaruh sama sekali.
+- **OCR lokal** (`OCR_ENABLED`, default **true**) butuh data bahasa tesseract di-pull
+  sekali sebelum dipakai — lihat "Setup" dan "OCR lokal" di bawah. Tidak butuh instalasi
+  sistem tambahan (tesseract.js + `@napi-rs/canvas` keduanya npm package biasa, sudah
+  terinstal lewat `npm install`), tapi data bahasanya (~1-3MB/bahasa) harus diunduh
+  terpisah karena bukan source code.
 
 ## Setup
 
@@ -56,6 +61,7 @@ npm install
 cp .env.example .env.local
 npm run db:up                   # start PostgreSQL + pgvector via Docker Compose
 npm run db:migrate               # apply Drizzle migrations
+npm run ocr:pull-language-data   # pull OCR language data (default: ind+eng, ~4MB total)
 npm run ai:up                    # start Ollama (local embedding + chat runtime) via Docker Compose
 npm run ai:pull-embedding-model   # pull EMBEDDING_MODEL (default: nomic-embed-text, ~274MB)
 npm run ai:pull-chat-model        # pull CHAT_MODEL (default: qwen2.5:3b-instruct, ~1.9GB)
@@ -175,6 +181,26 @@ File ASLI yang diunggah tetap yang disimpan (`storageKey`/`mimeType` tetap DOCX)
 hasil konversi hanya dipakai sesaat untuk ekstraksi teks, tidak pernah disimpan sebagai
 pengganti. Tanpa LibreOffice terinstal, upload DOCX gagal dengan `503` yang jelas
 ("LibreOffice tidak ditemukan"); upload PDF tidak terpengaruh sama sekali.
+
+**OCR untuk halaman hasil scan** (`OCR_ENABLED`, default **true**): halaman yang
+terdeteksi sebagai scan (`extractionStatus: "ocr_required"` — ada gambar, tidak ada
+teks yang bisa diekstrak) secara otomatis dirender ulang ke gambar dan dibaca lewat
+**tesseract.js** (OCR lokal, tanpa API eksternal). Bila berhasil dan confidence-nya di
+atas `OCR_MIN_CONFIDENCE` (default 60 dari skala 0–100), halaman itu berubah jadi
+`extractionStatus: "success"` dengan `isOcr: true` dan `ocrConfidence` tersimpan — ikut
+di-chunk dan di-embed seperti halaman teks biasa, jadi bisa dicari di chat. Di bawah
+ambang confidence (atau kalau mesin OCR gagal/tidak tersedia), halaman tetap
+`ocr_required` apa adanya — **tidak pernah** menyimpan hasil OCR yang tidak yakin
+seolah-olah itu teks asli, dan tidak pernah menggagalkan keseluruhan upload.
+
+Butuh data bahasa di-pull sekali (`npm run ocr:pull-language-data`, default `ind+eng`
+sesuai `OCR_LANGUAGES`) ke `OCR_LANG_DATA_DIR` sebelum dipakai — lihat "Setup". Tanpa
+itu, OCR gagal dengan jelas (log `[ocr] Tidak dapat memulai worker OCR...`) dan halaman
+tetap `ocr_required`, bukan kegagalan diam-diam atau crash. **tesseract.js secara
+default mengunduh data bahasa dari CDN saat pertama dipakai** — aplikasi ini TIDAK
+pernah membiarkan itu terjadi; `OCR_LANG_DATA_DIR` selalu diisi eksplisit ke direktori
+lokal (lihat `src/lib/documents/ocr.ts`), jadi tidak ada panggilan jaringan implisit
+saat memproses dokumen, sejalan dengan prinsip "tanpa layanan AI eksternal" proyek ini.
 
 Endpoint lain yang tersedia: `GET /api/v1/documents` (daftar + pagination/filter),
 `GET /api/v1/documents/:id` (detail + status ekstraksi per halaman),
@@ -530,7 +556,15 @@ cookies.txt` disertakan di permintaan berikutnya.
   memanggilnya (tidak ada tombol "lihat halaman" di `/documents`) — hanya teks hasil
   ekstraksi, bukan render visual halaman PDF.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
-  operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
+  operator gambar di halaman PDF, bukan analisis sempurna. OCR otomatis SUDAH ada
+  (`OCR_ENABLED`, lihat "Mengunggah dokumen") tapi dengan keterbatasan jujur: hanya
+  diverifikasi dengan gambar teks yang jelas/kontras tinggi (bukan hasil scan fisik
+  sungguhan dengan noise/kemiringan/kualitas rendah); `OCR_MIN_CONFIDENCE=60` adalah
+  nilai awal yang wajar, belum dibenchmark terhadap dataset dokumen scan nyata; dan
+  belum ada UI yang menunjukkan ke pengguna bahwa suatu kutipan berasal dari OCR
+  (kurang bisa dipercaya dibanding teks asli) — `isOcr`/`ocrConfidence` tersimpan di
+  `document_pages` dan sudah muncul di respons API, tapi belum ditampilkan khusus di
+  kartu sumber chat atau UI dokumen.
 - **Upload DOCX butuh LibreOffice terinstal di server** (`soffice` di PATH, lihat
   "Prasyarat") — satu dependency sistem tambahan, bukan hanya package npm. Nomor
   halaman hasil konversi DOCX→PDF mengikuti pagination hasil render LibreOffice, yang

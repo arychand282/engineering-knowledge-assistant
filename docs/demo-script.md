@@ -9,6 +9,7 @@ harus ditunjukkan dan apa yang perlu dijelaskan — bukan sekadar urutan klik.
 ```bash
 npm run db:up && npm run db:migrate
 npm run ai:up && npm run ai:pull-embedding-model && npm run ai:pull-chat-model
+npm run ocr:pull-language-data   # data bahasa OCR (ind+eng) — sekali saja
 npm run seed:dev-user   # mencetak email + password akun admin dev
 npm run dev
 ```
@@ -98,6 +99,10 @@ Eksternal").
 - Upload DOCX (selain PDF) butuh LibreOffice terinstal di server (`soffice` di PATH) —
   tanpa itu, upload DOCX gagal dengan error jelas, bukan diam-diam; PDF tidak
   terpengaruh. Lihat README "Prasyarat".
+- OCR lokal untuk halaman hasil scan (`OCR_ENABLED`, default aktif) baru diverifikasi
+  dengan gambar teks sintetis kontras tinggi, **belum** dengan scan fisik sungguhan
+  (noise, kemiringan, kualitas rendah) — jangan klaim akurasi tertentu di depan
+  audiens. Butuh `npm run ocr:pull-language-data` sekali sebelum dipakai.
 
 Jangan membingkai ulang keterbatasan ini sebagai "fitur mendatang yang sudah pasti" —
 sebutkan sebagai apa adanya: belum dikerjakan, dan kenapa (lihat PLANNING.md §18 untuk

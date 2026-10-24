@@ -21,15 +21,18 @@
     "ai:down": "docker compose stop ollama",
     "ai:pull-embedding-model": "tsx scripts/pull-model.ts",
     "ai:pull-chat-model": "tsx scripts/pull-model.ts qwen2.5:3b-instruct",
+    "ocr:pull-language-data": "tsx scripts/pull-ocr-language-data.ts",
     "seed:dev-user": "tsx scripts/seed-dev-user.ts"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.13",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.2",
     "pdfjs-dist": "^6.4.299",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4"
   },
   "devDependencies": {

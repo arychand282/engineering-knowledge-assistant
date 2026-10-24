@@ -45,5 +45,9 @@ next-env.d.ts
 /storage/*
 !/storage/.gitkeep
 
+# pulled OCR language data (npm run ocr:pull-language-data) — binary model files, not source
+/ocr-lang-data/*
+!/ocr-lang-data/.gitkeep
+
 # local Claude Code harness state (not part of the application)
 /.claude/

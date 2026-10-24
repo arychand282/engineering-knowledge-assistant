@@ -155,7 +155,8 @@ Semua target harus diukur menggunakan dataset pertanyaan yang ditinjau engineer/
 - Qdrant atau vector database terpisah
 - SSO perusahaan
 - Integrasi ERP/DMS
-- OCR skala besar
+- OCR skala besar (throughput/batch tinggi, antrian terpisah, GPU-accelerated) — OCR
+  per-dokumen sinkron SUDAH diimplementasikan (lihat §7 Tahap 2), ini soal skala/volume
 - SaaS multi-tenant; setiap perusahaan menggunakan deployment terpisah
 - HA/DR enterprise
 - Automatic approval atau keputusan keselamatan
@@ -553,7 +554,11 @@ Jangan memasukkan password, token, API key, isi dokumen sensitif, atau prompt le
 2. Simpan nomor halaman PDF berbasis 1.
 3. Tandai halaman dengan teks kosong atau ekstraksi gagal.
 4. Jangan menganggap teks hasil ekstraksi selalu lengkap.
-5. Untuk PDF scan, tandai `ocr_required`; OCR lokal menjadi task terpisah.
+5. Untuk PDF scan, tandai `ocr_required`. **OCR lokal diimplementasikan** sebagai
+   langkah kedua otomatis setelah klasifikasi ini (`OCR_ENABLED`, default true) —
+   tesseract.js + `@napi-rs/canvas` untuk rasterisasi halaman, lihat README "OCR untuk
+   halaman hasil scan" dan `src/lib/documents/ocr.ts`. Hasil OCR di bawah
+   `OCR_MIN_CONFIDENCE` tetap `ocr_required`, tidak pernah dipaksa dianggap berhasil.
 6. Ambil metadata dokumen dari form atau hasil parsing, tetapi minta verifikasi manusia jika nomor dokumen/revisi tidak pasti.
 
 ### Tahap 3: Chunking
@@ -1048,7 +1053,11 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 
 ### Fase lanjutan setelah prototype
 
-- OCR lokal untuk PDF scan.
+- ~~OCR lokal untuk PDF scan.~~ **Diimplementasikan** (tesseract.js lokal, opt-out via
+  `OCR_ENABLED`, lihat README "OCR untuk halaman hasil scan"). Baru diverifikasi dengan
+  gambar teks sintetis kontras tinggi, belum dengan scan fisik sungguhan (noise,
+  kemiringan, kualitas rendah) — lihat README "Keterbatasan saat ini" untuk detail yang
+  masih harus diuji sebelum pilot produksi.
 - ~~DOCX dan format tambahan.~~ **DOCX diimplementasikan** (via konversi LibreOffice,
   lihat §3 "Stack" baris DOCX parsing dan README "Mengunggah dokumen"). Format tambahan
   lain (mis. gambar, email) masih belum.
@@ -1090,7 +1099,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(115 unit + 65 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(115 unit + 72 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

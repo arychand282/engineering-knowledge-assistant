@@ -22,6 +22,32 @@ const baseEnvSchema = z.object({
   // verified to put it on PATH — see README "Prasyarat"). Override only if some other
   // install method doesn't, e.g. a direct path to the app bundle.
   SOFFICE_BINARY: z.string().min(1).default("soffice"),
+
+  // Local OCR (tesseract.js + @napi-rs/canvas for PDF page rasterization) for pages
+  // classified "ocr_required" (image present, no extractable text layer — a scanned
+  // page). Default ON: unlike RERANK_ENABLED, this can only improve a page that was
+  // otherwise completely unusable (empty, unsearchable), the latency cost is paid once
+  // at upload time (not per chat question), and any failure (worker/engine error,
+  // missing language data) degrades gracefully back to today's ocr_required behavior —
+  // never fails the upload. Still a real cost (CPU-bound OCR), hence configurable.
+  OCR_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  // tesseract.js language codes, "+"-joined. Indonesian + English matches this
+  // project's bilingual document examples (PLANNING.md/README samples use both).
+  OCR_LANGUAGES: z.string().min(1).default("ind+eng"),
+  // Local directory holding pulled {lang}.traineddata.gz files (npm run
+  // ocr:pull-language-data). NEVER defaults to tesseract.js's own CDN fallback — see
+  // src/lib/documents/ocr.ts for why that matters (no implicit network calls).
+  OCR_LANG_DATA_DIR: z.string().min(1).default("ocr-lang-data"),
+  OCR_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  // Below this (tesseract's own 0-100 confidence score), an OCR result is treated as
+  // unreliable and discarded — the page stays `ocr_required` rather than persisting
+  // low-confidence garbage as if it were real extracted text. Not benchmarked against a
+  // real scanned-document dataset; a reasonable starting default, not a tuned value.
+  OCR_MIN_CONFIDENCE: z.coerce.number().min(0).max(100).default(60),
+
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   EMBEDDING_MODEL: z.string().min(1).default("nomic-embed-text"),
   OLLAMA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
@@ -103,6 +129,11 @@ export type Env = {
   CHUNK_OVERLAP_WORDS: number;
   DOCX_CONVERT_TIMEOUT_MS: number;
   SOFFICE_BINARY: string;
+  OCR_ENABLED: boolean;
+  OCR_LANGUAGES: string;
+  OCR_LANG_DATA_DIR: string;
+  OCR_TIMEOUT_MS: number;
+  OCR_MIN_CONFIDENCE: number;
   OLLAMA_BASE_URL: string;
   EMBEDDING_MODEL: string;
   OLLAMA_REQUEST_TIMEOUT_MS: number;
@@ -142,6 +173,11 @@ function loadEnv(): Env {
     CHUNK_OVERLAP_WORDS: process.env.CHUNK_OVERLAP_WORDS,
     DOCX_CONVERT_TIMEOUT_MS: process.env.DOCX_CONVERT_TIMEOUT_MS,
     SOFFICE_BINARY: process.env.SOFFICE_BINARY,
+    OCR_ENABLED: process.env.OCR_ENABLED,
+    OCR_LANGUAGES: process.env.OCR_LANGUAGES,
+    OCR_LANG_DATA_DIR: process.env.OCR_LANG_DATA_DIR,
+    OCR_TIMEOUT_MS: process.env.OCR_TIMEOUT_MS,
+    OCR_MIN_CONFIDENCE: process.env.OCR_MIN_CONFIDENCE,
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
     OLLAMA_REQUEST_TIMEOUT_MS: process.env.OLLAMA_REQUEST_TIMEOUT_MS,
