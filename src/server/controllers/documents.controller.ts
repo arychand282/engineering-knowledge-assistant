@@ -3,6 +3,7 @@ import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
 import {
   documentIdParamSchema,
+  documentPageParamSchema,
   listDocumentsQuerySchema,
   updateDocumentSchema,
   uploadDocumentMetadataSchema,
@@ -10,12 +11,14 @@ import {
 import { DOCUMENT_MANAGEMENT_ROLES } from "@/server/auth/roles";
 import { recordAuditEvent } from "@/server/repositories/audit-event.repository";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
+import { getDocumentPage } from "@/server/usecases/documents/get-document-page.usecase";
 import {
   CorruptPdfError,
   DocumentNotFoundError,
   DuplicateDocumentError,
   FileTooLargeError,
   InvalidFileError,
+  PageNotFoundError,
   SelfSupersedeError,
   TooManyPagesError,
 } from "@/server/usecases/documents/errors";
@@ -27,6 +30,7 @@ import { jsonError, rateLimited, zodBadRequest } from "./_http-errors";
 import { type Actor, ForbiddenError, UnauthenticatedError, getActor, requireRole } from "./_actor";
 
 type RouteContext = { params: Promise<{ id: string }> };
+type PageRouteContext = { params: Promise<{ id: string; page: string }> };
 
 async function resolveActor(): Promise<Actor | Response> {
   try {
@@ -205,6 +209,28 @@ export async function patchDocument(request: Request, context: RouteContext) {
     }
     if (error instanceof SelfSupersedeError) {
       return jsonError(400, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function getDocumentPageById(_request: Request, context: PageRouteContext) {
+  const actor = await resolveActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  const paramsResult = documentPageParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  try {
+    const result = await getDocumentPage(paramsResult.data.id, paramsResult.data.page, actor);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError || error instanceof PageNotFoundError) {
+      return jsonError(404, error.message);
     }
     throw error;
   }

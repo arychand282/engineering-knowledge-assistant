@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { documentPages } from "@/lib/db/schema";
 
@@ -18,6 +18,17 @@ export async function listPagesByDocumentId(documentId: string): Promise<Documen
     .from(documentPages)
     .where(eq(documentPages.documentId, documentId))
     .orderBy(asc(documentPages.pageNumber));
+}
+
+export async function findPageByDocumentIdAndPageNumber(
+  documentId: string,
+  pageNumber: number,
+): Promise<DocumentPageRow | null> {
+  const [row] = await db
+    .select()
+    .from(documentPages)
+    .where(and(eq(documentPages.documentId, documentId), eq(documentPages.pageNumber, pageNumber)));
+  return row ?? null;
 }
 
 export async function deletePagesByDocumentId(documentId: string): Promise<void> {

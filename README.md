@@ -155,8 +155,13 @@ curl -b cookies.txt -X POST http://localhost:3000/api/v1/documents \
 
 Endpoint lain yang tersedia: `GET /api/v1/documents` (daftar + pagination/filter),
 `GET /api/v1/documents/:id` (detail + status ekstraksi per halaman),
+`GET /api/v1/documents/:id/pages/:page` (satu halaman: teks terekstrak + status ekstraksi),
 `POST /api/v1/documents/:id/reprocess` (ekstraksi ulang dari file yang tersimpan),
 `PATCH /api/v1/documents/:id` (ubah status/metadata — role `admin`/`document_controller`).
+
+`GET .../pages/:page` memakai aturan akses yang sama dengan `GET /api/v1/documents/:id` —
+`404` (bukan `403`) baik untuk dokumen yang tidak ada, dokumen yang tidak diizinkan,
+maupun nomor halaman yang tidak ada pada dokumen itu.
 
 `PATCH` menerima partial update dalam JSON body — kirim hanya field yang ingin diubah;
 field nullable (`effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId`) bisa
@@ -466,8 +471,11 @@ cookies.txt` disertakan di permintaan berikutnya.
   punya UI di `/documents` (tombol "Edit" per baris, hanya tampil untuk role yang
   berwenang) — tapi hanya untuk field inti (judul, nomor, tipe, revisi, status).
   `effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId` masih API-only, belum
-  ada form untuk itu. Belum ada endpoint `GET /api/v1/documents/:id/pages/:page`
-  (preview satu halaman) — masih di rencana PLANNING.md §12, di luar scope literal Task 3.
+  ada form untuk itu.
+- `GET /api/v1/documents/:id/pages/:page` (satu halaman: nomor, teks terekstrak, status
+  ekstraksi) ada di backend dan dipakai lewat API/curl, tapi belum ada UI untuk
+  memanggilnya (tidak ada tombol "lihat halaman" di `/documents`) — hanya teks hasil
+  ekstraksi, bukan render visual halaman PDF.
 - Deteksi halaman hasil scan (`ocr_required`) adalah heuristik berbasis ada/tidaknya
   operator gambar di halaman PDF, bukan analisis sempurna; tidak ada OCR otomatis.
 - Chunking memakai perkiraan jumlah kata sebagai proksi token (bukan tokenizer LLM

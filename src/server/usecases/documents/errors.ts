@@ -34,3 +34,10 @@ export class SelfSupersedeError extends Error {
     this.name = "SelfSupersedeError";
   }
 }
+
+export class PageNotFoundError extends Error {
+  constructor(documentId: string, pageNumber: number) {
+    super(`Halaman ${pageNumber} pada dokumen ${documentId} tidak ditemukan.`);
+    this.name = "PageNotFoundError";
+  }
+}

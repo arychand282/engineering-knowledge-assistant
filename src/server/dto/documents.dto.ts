@@ -35,6 +35,11 @@ export const documentIdParamSchema = z.object({
   id: z.string().uuid("id dokumen tidak valid"),
 });
 
+export const documentPageParamSchema = z.object({
+  id: z.string().uuid("id dokumen tidak valid"),
+  page: z.coerce.number().int().positive("page harus berupa angka bulat positif"),
+});
+
 /**
  * All fields optional (partial update); explicit `null` clears a nullable column,
  * an absent key leaves it unchanged. `status` has no `null` — it's NOT NULL with a

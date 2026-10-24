@@ -819,8 +819,13 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
   - Daftar dokumen sesuai akses pengguna, dengan pagination.
 - `GET /api/v1/documents/:id`
   - Metadata dokumen yang diizinkan.
-- `GET /api/v1/documents/:id/pages/:page`
-  - Preview halaman atau teks sesuai kebijakan akses.
+- `GET /api/v1/documents/:id/pages/:page` — **Diimplementasikan.**
+  - Satu halaman (nomor halaman, teks terekstrak, status ekstraksi) dari dokumen yang
+    diizinkan. Memakai aturan akses yang sama dengan `GET /api/v1/documents/:id`
+    (`assertDocumentAccessible`, dibagikan oleh keduanya) — `404` yang sama untuk dokumen
+    yang tidak ada maupun yang tidak diizinkan (bukan `403`, mencegah IDOR via existence
+    leak). `404` terpisah untuk nomor halaman yang tidak ada pada dokumen yang diizinkan.
+    Belum ada preview visual (gambar/render halaman) — hanya teks hasil ekstraksi.
 - `POST /api/v1/documents/:id/reprocess`
   - Memproses ulang dokumen; admin/document controller.
 - `PATCH /api/v1/documents/:id` — **Diimplementasikan.**
@@ -1067,7 +1072,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(97 unit + 51 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(97 unit + 58 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.
