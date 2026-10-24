@@ -1061,7 +1061,13 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
 - ~~DOCX dan format tambahan.~~ **DOCX diimplementasikan** (via konversi LibreOffice,
   lihat §3 "Stack" baris DOCX parsing dan README "Mengunggah dokumen"). Format tambahan
   lain (mis. gambar, email) masih belum.
-- Review/approval workflow untuk status dokumen.
+- Review/approval workflow untuk status dokumen. **Sebagian diimplementasikan**:
+  `PATCH /api/v1/documents/:id` otomatis mencatat `approvedBy`/`approvedAt`
+  (server-controlled, bukan field yang bisa diisi klien) saat status pertama kali
+  menjadi `effective`, plus audit event `approve_document` terpisah. Ini catatan
+  approval minimal (siapa/kapan), BUKAN alur review berjenjang — belum ada role
+  "approver" terpisah dari `document_controller`/`admin`, belum ada permintaan →
+  persetujuan dua tahap. Alur review sungguhan tetap belum dikerjakan.
 - Konflik lintas dokumen yang lebih sistematis.
 - ~~Reranker lokal.~~ **Diimplementasikan** (LLM-rerank via Ollama, opt-in
   `RERANK_ENABLED`, default false — lihat §8 langkah 6 dan "Mode Chat Eksternal" aturan
@@ -1099,7 +1105,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(115 unit + 72 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(115 unit + 76 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

@@ -222,9 +222,17 @@ curl -b cookies.txt -X PATCH http://localhost:3000/api/v1/documents/<id> \
   -d '{"status": "effective", "effectiveDate": "2026-01-01"}'
 ```
 
-Setiap perubahan status/metadata tercatat di audit log (`update_document`). Ini murni
-operasi CRUD role-gated — bukan alur approval berjenjang (itu tetap di roadmap "Fase
-lanjutan", lihat PLANNING.md §15).
+Setiap perubahan status/metadata tercatat di audit log (`update_document`). Saat status
+berubah MENJADI `effective` (dari status lain) untuk pertama kali, server otomatis
+mencatat `approvedBy` (user yang melakukan PATCH) dan `approvedAt` (waktu saat itu) —
+kolom ini **tidak bisa diisi langsung lewat body PATCH**, selalu ditentukan server dari
+siapa yang sedang login, dan tercatat sebagai audit event terpisah (`approve_document`).
+Transisi status MENJAUH dari `effective` (mis. ke `superseded`) sengaja TIDAK menghapus
+`approvedBy`/`approvedAt` — tetap sebagai riwayat siapa yang terakhir menyetujuinya,
+bukan dianggap "belum pernah disetujui". **Ini catatan approval minimal, bukan alur
+review berjenjang** (tidak ada role "approver" terpisah dari `document_controller`, tidak
+ada permintaan/persetujuan dua tahap) — itu tetap di roadmap "Fase lanjutan", lihat
+PLANNING.md §15.
 
 Respons upload/reprocess menyertakan `embeddedCount` dan `embeddingSkipped`. Jika Ollama
 sedang tidak aktif, upload tetap berhasil (chunk & metadata tersimpan) tapi

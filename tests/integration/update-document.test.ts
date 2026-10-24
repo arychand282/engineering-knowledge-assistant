@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/lib/db";
 import { auditEvents, documents, users } from "@/lib/db/schema";
@@ -77,6 +77,87 @@ describe("updateDocument", () => {
     });
 
     expect(updated.status).toBe("effective");
+  });
+
+  it("stamps approvedBy/approvedAt (server-controlled) when status newly becomes effective", async () => {
+    const doc = await insertDoc({ status: "draft" });
+    expect(doc.approvedBy).toBeNull();
+    expect(doc.approvedAt).toBeNull();
+
+    const before = new Date();
+    const updated = await updateDocument({
+      documentId: doc.id,
+      patch: { status: "effective" },
+      actorUserId: userId,
+    });
+
+    expect(updated.approvedBy).toBe(userId);
+    expect(updated.approvedAt).not.toBeNull();
+    expect(updated.approvedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+
+  it("does not re-stamp approvedAt when already effective and re-patched", async () => {
+    const doc = await insertDoc({ status: "draft" });
+    const firstApproval = await updateDocument({
+      documentId: doc.id,
+      patch: { status: "effective" },
+      actorUserId: userId,
+    });
+
+    const secondUpdate = await updateDocument({
+      documentId: doc.id,
+      patch: { title: "Judul diubah setelah efektif" },
+      actorUserId: userId,
+    });
+
+    expect(secondUpdate.approvedAt!.getTime()).toBe(firstApproval.approvedAt!.getTime());
+    expect(secondUpdate.approvedBy).toBe(firstApproval.approvedBy);
+  });
+
+  it("preserves approvedBy/approvedAt as history when status moves away from effective", async () => {
+    const doc = await insertDoc({ status: "draft" });
+    const approved = await updateDocument({
+      documentId: doc.id,
+      patch: { status: "effective" },
+      actorUserId: userId,
+    });
+
+    const superseded = await updateDocument({
+      documentId: doc.id,
+      patch: { status: "superseded" },
+      actorUserId: userId,
+    });
+
+    expect(superseded.status).toBe("superseded");
+    expect(superseded.approvedBy).toBe(approved.approvedBy);
+    expect(superseded.approvedAt!.getTime()).toBe(approved.approvedAt!.getTime());
+  });
+
+  it("records a separate approve_document audit event only on a genuine transition to effective", async () => {
+    const doc = await insertDoc({ status: "draft" });
+
+    await updateDocument({
+      documentId: doc.id,
+      patch: { title: "Bukan perubahan status" },
+      actorUserId: userId,
+    });
+    const beforeApproval = await db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.resourceId, doc.id), eq(auditEvents.action, "approve_document")));
+    expect(beforeApproval).toHaveLength(0);
+
+    await updateDocument({
+      documentId: doc.id,
+      patch: { status: "effective" },
+      actorUserId: userId,
+    });
+    const afterApproval = await db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.resourceId, doc.id), eq(auditEvents.action, "approve_document")));
+    expect(afterApproval).toHaveLength(1);
+    expect(afterApproval[0]).toMatchObject({ actorUserId: userId, result: "success" });
   });
 
   it("sets and then clears a nullable field (effectiveDate) via explicit null", async () => {
