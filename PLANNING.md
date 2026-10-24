@@ -851,6 +851,14 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
     kolom nullable). Menolak dokumen men-supersede dirinya sendiri. Tercatat di audit log
     (`update_document`). Belum ada alur approval berjenjang — itu bagian "Fase lanjutan
     setelah prototype" (§15), bukan endpoint CRUD role-gated ini.
+- `GET/POST /api/v1/documents/:id/access`, `DELETE .../access/:accessId` —
+  **Diimplementasikan.** Kelola `document_access` (role mana yang boleh mengakses
+  dokumen ini), role `admin`/`document_controller` saja. Sebelumnya satu-satunya cara
+  mengubah tabel ini adalah `psql` langsung — tidak ada API/UI sama sekali (lihat
+  demo-script.md lama). Sengaja hanya role-based; `project_id`/`site_id` di tabel ini
+  tidak diekspos karena belum ditegakkan oleh retrieval (§18 keputusan 12). `409` untuk
+  grant duplikat, `404` untuk revoke id yang tidak ada/salah dokumen. Audit log terpisah
+  (`grant_document_access`/`revoke_document_access`).
 
 ### Chat
 
@@ -909,8 +917,9 @@ Seluruh endpoint API internal berada di bawah prefix **`/api/v1/`** (bukan `/api
 
 5. **Detail Dokumen** — **Diimplementasikan** (`/documents/:id`): metadata, status,
    revisi, siapa yang menyetujui, status ekstraksi + badge OCR per halaman (lazy-load
-   teks per halaman), tombol proses ulang (role `admin`/`document_controller`). Belum
-   ada aksi "publikasi" terpisah dari mengubah status lewat tombol Edit di tabel.
+   teks per halaman), tombol proses ulang, dan kelola akses role (`document_access`) —
+   semua role `admin`/`document_controller`. Belum ada aksi "publikasi" terpisah dari
+   mengubah status lewat tombol Edit di tabel.
    - Metadata, status, revisi, halaman yang berhasil diekstrak.
    - Aksi publikasi/reprocess sesuai role.
 
@@ -1108,7 +1117,7 @@ Prototype dianggap selesai bila:
 - [x] Pertanyaan tanpa bukti tidak dipaksa dijawab.
 - [x] Kegagalan runtime AI ditangani secara aman.
 - [x] Dokumen dibatasi berdasarkan hak akses di backend.
-- [x] Tes utama lulus. _(115 unit + 78 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
+- [x] Tes utama lulus. _(115 unit + 90 integration test, semua lulus; evaluasi Task 7 6/7 — lihat `docs/evaluation.md` untuk kasus yang tidak lulus dan alasannya.)_
 - [x] README berisi setup, menjalankan test, mengonfigurasi model lokal, dan troubleshooting.
 - [x] Keterbatasan prototype didokumentasikan.
 - [x] Tidak ada secret atau dokumen rahasia yang masuk Git.

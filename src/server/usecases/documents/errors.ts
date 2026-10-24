@@ -42,3 +42,24 @@ export class PageNotFoundError extends Error {
     this.name = "PageNotFoundError";
   }
 }
+
+export class UnknownRoleError extends Error {
+  constructor(public readonly roleName: string) {
+    super(`Role tidak dikenal: ${roleName}`);
+    this.name = "UnknownRoleError";
+  }
+}
+
+export class DuplicateAccessGrantError extends Error {
+  constructor(roleName: string) {
+    super(`Role "${roleName}" sudah memiliki akses ke dokumen ini.`);
+    this.name = "DuplicateAccessGrantError";
+  }
+}
+
+export class AccessGrantNotFoundError extends Error {
+  constructor(accessId: string) {
+    super(`Akses ${accessId} tidak ditemukan pada dokumen ini.`);
+    this.name = "AccessGrantNotFoundError";
+  }
+}

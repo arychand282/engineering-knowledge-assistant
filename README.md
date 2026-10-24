@@ -98,8 +98,10 @@ Selain endpoint API di atas, ada UI minimal untuk memudahkan demo/manual testing
   "Disetujui" (email + waktu, dari `approvedBy`/`approvedAt`). Klik judul dokumen untuk
   membuka `/documents/:id` — detail dokumen (metadata, siapa yang menyetujui, status
   ekstraksi tiap halaman termasuk badge OCR + confidence), tombol untuk melihat teks
-  tiap halaman (lazy-load lewat `GET .../pages/:page`), dan tombol "Proses ulang"
-  (role `admin`/`document_controller`, memanggil `POST .../reprocess`).
+  tiap halaman (lazy-load lewat `GET .../pages/:page`), tombol "Proses ulang"
+  (role `admin`/`document_controller`, memanggil `POST .../reprocess`), dan bagian
+  "Akses dokumen" (role `admin`/`document_controller`) untuk memberi/mencabut akses
+  role ke dokumen itu — sebelumnya hanya bisa lewat `psql` langsung.
 - `/chat` — sidebar percakapan (buat baru/pilih/hapus) + thread chat, menampilkan status
   jawaban (`answered` / `insufficient_evidence` / `conflict_detected`) dan sumber kutipan
   per pesan.
@@ -243,6 +245,29 @@ Respons upload/reprocess menyertakan `embeddedCount` dan `embeddingSkipped`. Jik
 sedang tidak aktif, upload tetap berhasil (chunk & metadata tersimpan) tapi
 `embeddingSkipped: true` dan `embeddedCount: 0` — bukan dianggap gagal total, tapi juga
 tidak berpura-pura berhasil melakukan embedding.
+
+### Mengelola akses dokumen (`document_access`)
+
+Sampai sekarang, satu-satunya cara memberi akses dokumen ke suatu role adalah lewat
+`psql`/skrip langsung ke tabel `document_access` — tidak ada API maupun UI untuk itu
+(disebutkan jujur sebagai keterbatasan di `docs/demo-script.md`). Endpoint berikut
+menutup celah itu, role `admin`/`document_controller` saja:
+
+- `GET /api/v1/documents/:id/access` — daftar role yang punya akses ke dokumen ini.
+- `POST /api/v1/documents/:id/access` — beri akses ke satu role (`{"roleName": "engineer"}`).
+  `409` kalau role itu sudah punya akses (bukan gagal diam-diam, bukan duplikat baris).
+- `DELETE /api/v1/documents/:id/access/:accessId` — cabut satu akses. `404` kalau
+  `accessId` tidak ditemukan ATAU milik dokumen lain (tidak bisa mencabut akses dokumen
+  lain lewat salah tebak id).
+
+Sengaja hanya mengelola akses berbasis **role** (kolom `project_id`/`site_id` yang ada
+di tabel `document_access` tidak diekspos di sini) — kolom itu belum benar-benar
+ditegakkan oleh `getAccessibleDocumentIds` (lihat PLANNING.md §18 keputusan 12), jadi
+menampilkan form untuk mengisinya akan menyiratkan pembatasan yang sebenarnya belum
+berlaku. UI-nya ada di `/documents/:id` (bagian "Akses dokumen").
+
+Setiap pemberian/pencabutan akses tercatat di audit log (`grant_document_access` /
+`revoke_document_access`).
 
 ### Pencarian dokumen (Task 4)
 

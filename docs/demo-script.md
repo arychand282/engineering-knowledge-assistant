@@ -40,9 +40,10 @@ Eksternal").
 
 ### 3. Beri akses dan tanya di chat
 
-- Beri akses dokumen tersebut ke salah satu role lewat `document_access` (belum ada UI
-  untuk ini — jalankan lewat `psql` atau skrip; sebutkan secara jujur ke audiens bahwa
-  ini keterbatasan UI saat ini, bukan keterbatasan model keamanannya).
+- Beri akses dokumen tersebut ke salah satu role di bagian "Akses dokumen" pada
+  `/documents/:id` (pilih role, klik "Beri akses"). Tunjukkan bahwa dokumen yang baru
+  diunggah memang tidak muncul di sana secara default — default-deny sungguhan, bukan
+  sekadar klaim.
 - Ke `/chat`, ajukan pertanyaan yang jawabannya ADA di dokumen tersebut.
 - Tunjukkan: jawaban, status `answered`, kartu sumber (judul, nomor dokumen, revisi,
   halaman, kutipan persis).

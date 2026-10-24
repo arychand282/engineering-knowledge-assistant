@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { env } from "@/lib/env";
 import {
+  documentAccessIdParamSchema,
   documentIdParamSchema,
   documentPageParamSchema,
+  grantDocumentAccessSchema,
   listDocumentsQuerySchema,
   updateDocumentSchema,
   uploadDocumentMetadataSchema,
@@ -13,9 +15,11 @@ import { recordAuditEvent } from "@/server/repositories/audit-event.repository";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
 import { getDocumentPage } from "@/server/usecases/documents/get-document-page.usecase";
 import {
+  AccessGrantNotFoundError,
   CorruptDocxError,
   CorruptPdfError,
   DocumentNotFoundError,
+  DuplicateAccessGrantError,
   DuplicateDocumentError,
   FileTooLargeError,
   InvalidFileError,
@@ -23,9 +27,13 @@ import {
   PageNotFoundError,
   SelfSupersedeError,
   TooManyPagesError,
+  UnknownRoleError,
 } from "@/server/usecases/documents/errors";
+import { grantDocumentAccess } from "@/server/usecases/documents/grant-document-access.usecase";
+import { listDocumentAccess } from "@/server/usecases/documents/list-document-access.usecase";
 import { listDocuments } from "@/server/usecases/documents/list-documents.usecase";
 import { reprocessDocument } from "@/server/usecases/documents/reprocess-document.usecase";
+import { revokeDocumentAccess } from "@/server/usecases/documents/revoke-document-access.usecase";
 import { updateDocument } from "@/server/usecases/documents/update-document.usecase";
 import { uploadDocument } from "@/server/usecases/documents/upload-document.usecase";
 import { jsonError, rateLimited, zodBadRequest } from "./_http-errors";
@@ -33,6 +41,23 @@ import { type Actor, ForbiddenError, UnauthenticatedError, getActor, requireRole
 
 type RouteContext = { params: Promise<{ id: string }> };
 type PageRouteContext = { params: Promise<{ id: string; page: string }> };
+type AccessRouteContext = { params: Promise<{ id: string; accessId: string }> };
+
+async function resolveManagementActor(): Promise<Actor | Response> {
+  const actor = await resolveActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+  try {
+    requireRole(actor, DOCUMENT_MANAGEMENT_ROLES);
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return jsonError(403, error.message);
+    }
+    throw error;
+  }
+  return actor;
+}
 
 async function resolveActor(): Promise<Actor | Response> {
   try {
@@ -46,18 +71,9 @@ async function resolveActor(): Promise<Actor | Response> {
 }
 
 export async function postDocument(request: Request) {
-  const actor = await resolveActor();
+  const actor = await resolveManagementActor();
   if (actor instanceof Response) {
     return actor;
-  }
-
-  try {
-    requireRole(actor, DOCUMENT_MANAGEMENT_ROLES);
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return jsonError(403, error.message);
-    }
-    throw error;
   }
 
   const rateLimit = checkRateLimit(
@@ -180,18 +196,9 @@ export async function getDocumentById(_request: Request, context: RouteContext) 
 }
 
 export async function patchDocument(request: Request, context: RouteContext) {
-  const actor = await resolveActor();
+  const actor = await resolveManagementActor();
   if (actor instanceof Response) {
     return actor;
-  }
-
-  try {
-    requireRole(actor, DOCUMENT_MANAGEMENT_ROLES);
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return jsonError(403, error.message);
-    }
-    throw error;
   }
 
   const paramsResult = documentIdParamSchema.safeParse(await context.params);
@@ -246,18 +253,9 @@ export async function getDocumentPageById(_request: Request, context: PageRouteC
 }
 
 export async function postReprocessDocument(_request: Request, context: RouteContext) {
-  const actor = await resolveActor();
+  const actor = await resolveManagementActor();
   if (actor instanceof Response) {
     return actor;
-  }
-
-  try {
-    requireRole(actor, DOCUMENT_MANAGEMENT_ROLES);
-  } catch (error) {
-    if (error instanceof ForbiddenError) {
-      return jsonError(403, error.message);
-    }
-    throw error;
   }
 
   const paramsResult = documentIdParamSchema.safeParse(await context.params);
@@ -288,6 +286,92 @@ export async function postReprocessDocument(_request: Request, context: RouteCon
     }
     if (error instanceof LibreOfficeUnavailableError) {
       return jsonError(503, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function getDocumentAccess(_request: Request, context: RouteContext) {
+  const actor = await resolveManagementActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  const paramsResult = documentIdParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  try {
+    const items = await listDocumentAccess(paramsResult.data.id);
+    return NextResponse.json({ items });
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError) {
+      return jsonError(404, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function postDocumentAccess(request: Request, context: RouteContext) {
+  const actor = await resolveManagementActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  const paramsResult = documentIdParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  const body = await request.json().catch(() => null);
+  const bodyResult = grantDocumentAccessSchema.safeParse(body);
+  if (!bodyResult.success) {
+    return zodBadRequest(bodyResult.error);
+  }
+
+  try {
+    const grant = await grantDocumentAccess({
+      documentId: paramsResult.data.id,
+      roleName: bodyResult.data.roleName,
+      actorUserId: actor.id,
+    });
+    return NextResponse.json({ grant }, { status: 201 });
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError) {
+      return jsonError(404, error.message);
+    }
+    if (error instanceof UnknownRoleError) {
+      return jsonError(400, error.message);
+    }
+    if (error instanceof DuplicateAccessGrantError) {
+      return jsonError(409, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function deleteDocumentAccess(_request: Request, context: AccessRouteContext) {
+  const actor = await resolveManagementActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  const paramsResult = documentAccessIdParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  try {
+    await revokeDocumentAccess({
+      documentId: paramsResult.data.id,
+      accessId: paramsResult.data.accessId,
+      actorUserId: actor.id,
+    });
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError || error instanceof AccessGrantNotFoundError) {
+      return jsonError(404, error.message);
     }
     throw error;
   }

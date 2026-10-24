@@ -7,6 +7,9 @@ import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
 import { EXTRACTION_STATUS_LABELS, STATUS_LABELS } from "./status-labels";
 
 const DOCUMENT_MANAGEMENT_ROLES = ["admin", "document_controller"];
+// Mirrors ALL_ROLES server-side (src/server/auth/roles.ts) — same local-duplication
+// convention the admin UI already uses, not a server fetch.
+const ALL_ROLES = ["admin", "document_controller", "engineer", "viewer"];
 
 interface DocumentDetail {
   id: string;
@@ -40,6 +43,12 @@ interface ReprocessResult {
   embeddingSkipped: boolean;
 }
 
+interface AccessGrant {
+  id: string;
+  roleName: string;
+  createdAt: string;
+}
+
 export function DocumentDetailClient({ documentId }: { documentId: string }) {
   const { user } = useAuth();
   // Mirrors DOCUMENT_MANAGEMENT_ROLES server-side — a UI convenience only, the
@@ -58,6 +67,22 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
   const [pageTextByNumber, setPageTextByNumber] = useState<Record<number, string>>({});
   const [loadingPageNumber, setLoadingPageNumber] = useState<number | null>(null);
   const [pageTextError, setPageTextError] = useState<string | null>(null);
+
+  const [accessGrants, setAccessGrants] = useState<AccessGrant[]>([]);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [roleToGrant, setRoleToGrant] = useState(ALL_ROLES[0]);
+  const [granting, setGranting] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  const loadAccess = useCallback(async () => {
+    try {
+      const res = await apiFetch(`/api/v1/documents/${documentId}/access`);
+      const data = await parseJsonOrThrow<{ items: AccessGrant[] }>(res);
+      setAccessGrants(data.items);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Gagal memuat daftar akses.");
+    }
+  }, [documentId]);
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +106,52 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  useEffect(() => {
+    // GET .../access is management-only (403 for engineer/viewer) — only call it once
+    // we actually know the signed-in user can manage documents.
+    if (canManage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void loadAccess();
+    }
+  }, [canManage, loadAccess]);
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault();
+    setGranting(true);
+    setAccessError(null);
+    try {
+      const res = await apiFetch(`/api/v1/documents/${documentId}/access`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roleName: roleToGrant }),
+      });
+      await parseJsonOrThrow(res);
+      await loadAccess();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Gagal memberi akses.");
+    } finally {
+      setGranting(false);
+    }
+  }
+
+  async function handleRevoke(accessId: string) {
+    setRevokingId(accessId);
+    setAccessError(null);
+    try {
+      const res = await apiFetch(`/api/v1/documents/${documentId}/access/${accessId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        throw new Error((await res.json().catch(() => null))?.error ?? "Gagal mencabut akses.");
+      }
+      await loadAccess();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Gagal mencabut akses.");
+    } finally {
+      setRevokingId(null);
+    }
+  }
 
   async function handleReprocess() {
     setReprocessing(true);
@@ -197,6 +268,64 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                 ? "embedding TERLEWAT (Ollama tidak aktif)"
                 : `${reprocessResult.embeddedCount} embedding dibuat`}
               .
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canManage ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Akses dokumen
+          </h2>
+          <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+            Role yang bisa mencari dokumen ini di chat (default-deny — role yang tidak terdaftar di
+            sini tidak bisa mengaksesnya sama sekali).
+          </p>
+          {accessGrants.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Belum ada role yang diberi akses.
+            </p>
+          ) : (
+            <ul className="mb-2 divide-y divide-zinc-100 rounded border border-zinc-200 text-sm dark:divide-zinc-900 dark:border-zinc-800">
+              {accessGrants.map((grant) => (
+                <li key={grant.id} className="flex items-center justify-between px-3 py-1.5">
+                  <span>{grant.roleName}</span>
+                  <button
+                    type="button"
+                    disabled={revokingId === grant.id}
+                    onClick={() => handleRevoke(grant.id)}
+                    className="rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 disabled:opacity-40 dark:border-red-900 dark:text-red-400"
+                  >
+                    {revokingId === grant.id ? "Mencabut…" : "Cabut"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form onSubmit={handleGrant} className="flex items-center gap-2">
+            <select
+              value={roleToGrant}
+              onChange={(e) => setRoleToGrant(e.target.value)}
+              className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              {ALL_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={granting}
+              className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+            >
+              {granting ? "Memberi akses…" : "Beri akses"}
+            </button>
+          </form>
+          {accessError ? (
+            <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+              {accessError}
             </p>
           ) : null}
         </section>

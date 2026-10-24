@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { documentStatusEnum } from "@/lib/db/schema";
+import { ALL_ROLES } from "@/server/auth/roles";
 
 const emptyToUndefined = (value: unknown) => (value === "" || value === null ? undefined : value);
 
@@ -66,3 +67,14 @@ export const updateDocumentSchema = z
   });
 
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
+
+export const grantDocumentAccessSchema = z.object({
+  roleName: z.enum(ALL_ROLES),
+});
+
+export type GrantDocumentAccessInput = z.infer<typeof grantDocumentAccessSchema>;
+
+export const documentAccessIdParamSchema = z.object({
+  id: z.string().uuid("id dokumen tidak valid"),
+  accessId: z.string().uuid("id akses tidak valid"),
+});
