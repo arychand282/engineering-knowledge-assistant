@@ -1,18 +1,33 @@
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { documents } from "@/lib/db/schema";
+import { documents, users } from "@/lib/db/schema";
 import type { ListDocumentsQuery } from "@/server/dto/documents.dto";
 
 export type NewDocument = typeof documents.$inferInsert;
 export type DocumentRow = typeof documents.$inferSelect;
+
+/** DocumentRow plus the approver's email resolved via a join — `approvedByEmail` is
+ * null whenever `approvedBy` is (not yet approved, or the approving user was deleted). */
+export interface DocumentWithApprover extends DocumentRow {
+  approvedByEmail: string | null;
+}
+
+const documentWithApproverColumns = {
+  ...getTableColumns(documents),
+  approvedByEmail: users.email,
+};
 
 export async function insertDocument(values: NewDocument): Promise<DocumentRow> {
   const [row] = await db.insert(documents).values(values).returning();
   return row;
 }
 
-export async function findDocumentById(id: string): Promise<DocumentRow | null> {
-  const [row] = await db.select().from(documents).where(eq(documents.id, id));
+export async function findDocumentById(id: string): Promise<DocumentWithApprover | null> {
+  const [row] = await db
+    .select(documentWithApproverColumns)
+    .from(documents)
+    .leftJoin(users, eq(users.id, documents.approvedBy))
+    .where(eq(documents.id, id));
   return row ?? null;
 }
 
@@ -41,7 +56,7 @@ export async function findDocumentsByIds(ids: string[]): Promise<DocumentRow[]> 
 }
 
 export interface ListDocumentsResult {
-  items: DocumentRow[];
+  items: DocumentWithApprover[];
   total: number;
 }
 
@@ -70,8 +85,9 @@ export async function listDocuments(
 
   const [items, totalRows] = await Promise.all([
     db
-      .select()
+      .select(documentWithApproverColumns)
       .from(documents)
+      .leftJoin(users, eq(users.id, documents.approvedBy))
       .where(whereClause)
       .orderBy(desc(documents.createdAt))
       .limit(filter.pageSize)

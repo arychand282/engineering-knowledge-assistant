@@ -35,6 +35,21 @@ function toDraft(doc: DocumentRowView): EditDraft {
 const inputClass =
   "w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 
+/** Read-only — approval is server-controlled (see PATCH .../documents/:id), never part
+ * of the inline edit form, so this renders the same whether or not the row is editing. */
+function ApprovalCell({ doc }: { doc: DocumentRowView }) {
+  if (!doc.approvedByEmail || !doc.approvedAt) {
+    return <span className="text-zinc-400 dark:text-zinc-600">—</span>;
+  }
+  return (
+    <span className="text-zinc-500 dark:text-zinc-400">
+      {doc.approvedByEmail}
+      <br />
+      {new Date(doc.approvedAt).toLocaleString("id-ID")}
+    </span>
+  );
+}
+
 export function DocumentTable({
   documents,
   canEdit = false,
@@ -113,6 +128,7 @@ export function DocumentTable({
           <th className="py-2 pr-3 font-medium">Tipe</th>
           <th className="py-2 pr-3 font-medium">Revisi</th>
           <th className="py-2 pr-3 font-medium">Status</th>
+          <th className="py-2 pr-3 font-medium">Disetujui</th>
           <th className="py-2 pr-3 font-medium">Diunggah</th>
           {canEdit ? <th className="py-2 font-medium">Aksi</th> : null}
         </tr>
@@ -165,6 +181,9 @@ export function DocumentTable({
                       ))}
                     </select>
                   </td>
+                  <td className="py-2 pr-3 text-xs">
+                    <ApprovalCell doc={doc} />
+                  </td>
                   <td className="py-2 pr-3 text-zinc-500 dark:text-zinc-400">
                     {new Date(doc.createdAt).toLocaleString("id-ID")}
                   </td>
@@ -203,6 +222,9 @@ export function DocumentTable({
                   <td className="py-2 pr-3">{doc.documentType}</td>
                   <td className="py-2 pr-3">{doc.revision}</td>
                   <td className="py-2 pr-3">{STATUS_LABELS[doc.status] ?? doc.status}</td>
+                  <td className="py-2 pr-3 text-xs">
+                    <ApprovalCell doc={doc} />
+                  </td>
                   <td className="py-2 pr-3 text-zinc-500 dark:text-zinc-400">
                     {new Date(doc.createdAt).toLocaleString("id-ID")}
                   </td>

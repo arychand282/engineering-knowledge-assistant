@@ -3,10 +3,15 @@ import { and, desc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/lib/db";
 import { auditEvents, documents, users } from "@/lib/db/schema";
+import {
+  findDocumentById,
+  listDocuments as listDocumentsRepo,
+} from "@/server/repositories/document.repository";
 import { DocumentNotFoundError, SelfSupersedeError } from "@/server/usecases/documents/errors";
 import { updateDocument } from "@/server/usecases/documents/update-document.usecase";
 
 let userId: string;
+let userEmail: string;
 const createdDocumentIds: string[] = [];
 
 function fakeDocument(overrides: Partial<typeof documents.$inferInsert> = {}) {
@@ -37,6 +42,7 @@ beforeAll(async () => {
     .values({ email: `update-doc-${randomUUID()}@example.test`, name: "Update Doc Test User" })
     .returning();
   userId = user.id;
+  userEmail = user.email;
 });
 
 afterEach(async () => {
@@ -94,6 +100,26 @@ describe("updateDocument", () => {
     expect(updated.approvedBy).toBe(userId);
     expect(updated.approvedAt).not.toBeNull();
     expect(updated.approvedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+
+  it("resolves the approver's email via findDocumentById/listDocuments (not the PATCH response itself)", async () => {
+    const doc = await insertDoc({ status: "draft" });
+
+    const patched = await updateDocument({
+      documentId: doc.id,
+      patch: { status: "effective" },
+      actorUserId: userId,
+    });
+    // The raw UPDATE...RETURNING result has no join — email resolution is a read-side
+    // concern (findDocumentById/listDocuments), not something PATCH's response carries.
+    expect("approvedByEmail" in patched).toBe(false);
+
+    const fetched = await findDocumentById(doc.id);
+    expect(fetched?.approvedByEmail).toBe(userEmail);
+
+    const { items } = await listDocumentsRepo({ page: 1, pageSize: 50 });
+    const listed = items.find((item) => item.id === doc.id);
+    expect(listed?.approvedByEmail).toBe(userEmail);
   });
 
   it("does not re-stamp approvedAt when already effective and re-patched", async () => {

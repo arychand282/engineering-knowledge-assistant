@@ -6,4 +6,6 @@ export interface DocumentRowView {
   revision: string;
   status: string;
   createdAt: string;
+  approvedByEmail: string | null;
+  approvedAt: string | null;
 }
