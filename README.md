@@ -161,8 +161,11 @@ terbaru, dengan pagination).
 
 Rate limiting (in-memory, per-proses — lihat "Keterbatasan" di bawah): login dibatasi per
 email (`LOGIN_RATE_LIMIT_MAX_ATTEMPTS`/`_WINDOW_MS`, default 10/15 menit), upload per
-pengguna (`UPLOAD_RATE_LIMIT_*`, default 20/jam), chat per pengguna (`CHAT_RATE_LIMIT_*`,
-default 30/jam) — respons `429` menyertakan header `Retry-After` (detik).
+pengguna (`UPLOAD_RATE_LIMIT_*`, default 20/jam), reprocess per pengguna
+(`REPROCESS_RATE_LIMIT_*`, default 20/jam — sama kelas biaya dengan upload, ditambahkan
+lewat security review setelah tombol "Proses ulang" dapat UI), chat per pengguna
+(`CHAT_RATE_LIMIT_*`, default 30/jam) — respons `429` menyertakan header `Retry-After`
+(detik).
 
 ### Mengunggah dokumen (Task 3)
 

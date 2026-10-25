@@ -258,6 +258,19 @@ export async function postReprocessDocument(_request: Request, context: RouteCon
     return actor;
   }
 
+  const rateLimit = checkRateLimit(
+    "reprocess",
+    actor.id,
+    env.REPROCESS_RATE_LIMIT_MAX_ATTEMPTS,
+    env.REPROCESS_RATE_LIMIT_WINDOW_MS,
+  );
+  if (!rateLimit.allowed) {
+    return rateLimited(
+      "Terlalu banyak permintaan proses ulang dalam waktu singkat. Coba lagi nanti.",
+      rateLimit.retryAfterMs,
+    );
+  }
+
   const paramsResult = documentIdParamSchema.safeParse(await context.params);
   if (!paramsResult.success) {
     return zodBadRequest(paramsResult.error);

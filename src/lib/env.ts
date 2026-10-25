@@ -119,6 +119,15 @@ const baseEnvSchema = z.object({
     .int()
     .positive()
     .default(60 * 60_000),
+  // Same cost class as upload (full extraction + OCR + re-embedding), so same default
+  // limits — added after a security review found reprocess had no rate limit at all,
+  // unlike upload, right as it gained a one-click UI button for the first time.
+  REPROCESS_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(20),
+  REPROCESS_RATE_LIMIT_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60 * 60_000),
 });
 
 export type Env = {
@@ -162,6 +171,8 @@ export type Env = {
   UPLOAD_RATE_LIMIT_WINDOW_MS: number;
   CHAT_RATE_LIMIT_MAX_ATTEMPTS: number;
   CHAT_RATE_LIMIT_WINDOW_MS: number;
+  REPROCESS_RATE_LIMIT_MAX_ATTEMPTS: number;
+  REPROCESS_RATE_LIMIT_WINDOW_MS: number;
 };
 
 function loadEnv(): Env {
@@ -206,6 +217,8 @@ function loadEnv(): Env {
     UPLOAD_RATE_LIMIT_WINDOW_MS: process.env.UPLOAD_RATE_LIMIT_WINDOW_MS,
     CHAT_RATE_LIMIT_MAX_ATTEMPTS: process.env.CHAT_RATE_LIMIT_MAX_ATTEMPTS,
     CHAT_RATE_LIMIT_WINDOW_MS: process.env.CHAT_RATE_LIMIT_WINDOW_MS,
+    REPROCESS_RATE_LIMIT_MAX_ATTEMPTS: process.env.REPROCESS_RATE_LIMIT_MAX_ATTEMPTS,
+    REPROCESS_RATE_LIMIT_WINDOW_MS: process.env.REPROCESS_RATE_LIMIT_WINDOW_MS,
   });
 
   if (!parsed.success) {
