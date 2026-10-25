@@ -128,6 +128,34 @@ const baseEnvSchema = z.object({
     .int()
     .positive()
     .default(60 * 60_000),
+
+  // WhatsApp integration (explicit, scoped exception to the same class of rule as
+  // CHAT_PROVIDER — see PLANNING.md §1/§18 decision 9: never build this speculatively,
+  // only when the client has actually asked for it, which is the case here). Default
+  // "none" — nothing WhatsApp-related runs unless a provider is explicitly chosen.
+  //
+  // "baileys" = unofficial (whatsapp-rust-bridge-backed, not Meta's API): links a real
+  // WhatsApp account via QR-code pairing (admin-only /admin/whatsapp page), no business
+  // verification needed, fastest path to something testable — but against WhatsApp's
+  // ToS and the linked number can be banned. Explicitly chosen over Meta Cloud API for
+  // now because the client doesn't have a Meta Business account registered yet.
+  // "meta" = official Cloud API boilerplate (src/lib/whatsapp/providers/meta-cloud-api.ts),
+  // scaffolded but inert until WHATSAPP_META_* below are filled in — switch to this once
+  // the client registers with Meta, not before.
+  WHATSAPP_PROVIDER: z.enum(["none", "baileys", "meta"]).default("none"),
+  // Local directory holding Baileys' auth session files (useMultiFileAuthState) — same
+  // sensitivity as a session token (see .gitignore), never committed.
+  WHATSAPP_SESSION_DIR: z.string().min(1).default("whatsapp-session"),
+  // Meta Cloud API credentials — all optional, only required when WHATSAPP_PROVIDER=meta.
+  WHATSAPP_META_ACCESS_TOKEN: z.string().min(1).optional(),
+  WHATSAPP_META_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  // Shared secret Meta's webhook verification GET request must echo back (Meta App
+  // dashboard config, not a value Meta gives you — you choose this yourself).
+  WHATSAPP_META_VERIFY_TOKEN: z.string().min(1).optional(),
+  // Used to verify the X-Hub-Signature-256 header on incoming webhook POSTs actually
+  // came from Meta (Meta App dashboard → App Secret), not an unauthenticated request
+  // claiming to be a WhatsApp message.
+  WHATSAPP_META_APP_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = {
@@ -173,6 +201,12 @@ export type Env = {
   CHAT_RATE_LIMIT_WINDOW_MS: number;
   REPROCESS_RATE_LIMIT_MAX_ATTEMPTS: number;
   REPROCESS_RATE_LIMIT_WINDOW_MS: number;
+  WHATSAPP_PROVIDER: "none" | "baileys" | "meta";
+  WHATSAPP_SESSION_DIR: string;
+  WHATSAPP_META_ACCESS_TOKEN?: string;
+  WHATSAPP_META_PHONE_NUMBER_ID?: string;
+  WHATSAPP_META_VERIFY_TOKEN?: string;
+  WHATSAPP_META_APP_SECRET?: string;
 };
 
 function loadEnv(): Env {
@@ -219,6 +253,12 @@ function loadEnv(): Env {
     CHAT_RATE_LIMIT_WINDOW_MS: process.env.CHAT_RATE_LIMIT_WINDOW_MS,
     REPROCESS_RATE_LIMIT_MAX_ATTEMPTS: process.env.REPROCESS_RATE_LIMIT_MAX_ATTEMPTS,
     REPROCESS_RATE_LIMIT_WINDOW_MS: process.env.REPROCESS_RATE_LIMIT_WINDOW_MS,
+    WHATSAPP_PROVIDER: process.env.WHATSAPP_PROVIDER,
+    WHATSAPP_SESSION_DIR: process.env.WHATSAPP_SESSION_DIR,
+    WHATSAPP_META_ACCESS_TOKEN: process.env.WHATSAPP_META_ACCESS_TOKEN,
+    WHATSAPP_META_PHONE_NUMBER_ID: process.env.WHATSAPP_META_PHONE_NUMBER_ID,
+    WHATSAPP_META_VERIFY_TOKEN: process.env.WHATSAPP_META_VERIFY_TOKEN,
+    WHATSAPP_META_APP_SECRET: process.env.WHATSAPP_META_APP_SECRET,
   });
 
   if (!parsed.success) {
@@ -247,6 +287,20 @@ function loadEnv(): Env {
       `${requiredKey.envVar} wajib diisi jika CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
         "CHAT_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
     );
+  }
+
+  if (data.WHATSAPP_PROVIDER === "meta") {
+    const missing = [
+      ["WHATSAPP_META_ACCESS_TOKEN", data.WHATSAPP_META_ACCESS_TOKEN],
+      ["WHATSAPP_META_PHONE_NUMBER_ID", data.WHATSAPP_META_PHONE_NUMBER_ID],
+      ["WHATSAPP_META_VERIFY_TOKEN", data.WHATSAPP_META_VERIFY_TOKEN],
+      ["WHATSAPP_META_APP_SECRET", data.WHATSAPP_META_APP_SECRET],
+    ].filter(([, value]) => !value);
+    if (missing.length > 0) {
+      throw new Error(
+        `${missing.map(([name]) => name).join(", ")} wajib diisi jika WHATSAPP_PROVIDER=meta.`,
+      );
+    }
   }
 
   return { ...data, DATABASE_URL: databaseUrl };

@@ -10,7 +10,10 @@ const nextConfig: NextConfig = {
   // which has the same bundling problem. Both need to stay real `require()`s resolved
   // at runtime instead of being bundled — found via a real 500 on POST
   // /api/v1/documents once OCR (src/lib/documents/ocr.ts) was wired into the upload path.
-  serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
+  // @whiskeysockets/baileys bundles whatsapp-rust-bridge (a Rust/WASM module) and opens
+  // a persistent WebSocket connection — same class of "not statically bundleable by
+  // Turbopack" risk already hit with the other two entries here, added proactively.
+  serverExternalPackages: ["@napi-rs/canvas", "tesseract.js", "@whiskeysockets/baileys"],
   turbopack: {
     rules: {
       "*.css": {

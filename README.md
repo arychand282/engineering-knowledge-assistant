@@ -453,6 +453,74 @@ jawaban chat.
   kamu test salah satu dengan key asli dan responsnya gagal validasi Zod (bukan error
   koneksi), ini kemungkinan besar penyebabnya — lihat `src/lib/ai/providers/`.
 
+### Chat lewat WhatsApp (opsional, `WHATSAPP_PROVIDER`, default `none`)
+
+Permintaan eksplisit dari klien ("chat via WhatsApp"). **Pengecualian eksplisit dan
+terbatas terhadap aturan "tanpa AI/layanan eksternal tanpa persetujuan"**, sama seperti
+`CHAT_PROVIDER` di atas — lihat PLANNING.md §18 keputusan 9. Default `none`: tidak ada
+apa pun yang berjalan sampai provider dipilih secara eksplisit.
+
+WhatsApp tidak punya konsep login, jadi nomor telepon yang masuk tidak otomatis punya
+identitas. Model akses: **admin yang menautkan nomor ke akun** (`/admin/whatsapp`) —
+nomor yang belum ditautkan dibalas pesan "belum terdaftar", tidak pernah diberi akses
+diam-diam maupun identitas dadakan. Setelah tertaut, satu nomor = satu percakapan yang
+dilanjutkan terus (sama seperti riwayat chat web, lihat `CHAT_HISTORY_LIMIT` di atas) dan
+berbagi **rate limit yang sama** dengan chat web (`CHAT_RATE_LIMIT_MAX_ATTEMPTS`, dikunci
+per `userId`, bukan per nomor — supaya satu pengguna tidak bisa melewati limit web dengan
+pindah ke WhatsApp).
+
+```bash
+# .env.local
+WHATSAPP_PROVIDER=baileys   # atau: meta
+```
+
+| `WHATSAPP_PROVIDER` | Butuh                                            | Catatan                                                              |
+| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
+| `none` (default)     | —                                                  | Tidak aktif.                                                           |
+| `baileys`            | Scan QR sekali di `/admin/whatsapp`                | **Tidak resmi** (protokol WhatsApp Web, bukan API Meta) — melanggar ToS WhatsApp, nomor yang ditautkan bisa diblokir. Hanya untuk demo/dev. |
+| `meta`               | `WHATSAPP_META_ACCESS_TOKEN`, `_PHONE_NUMBER_ID`, `_VERIFY_TOKEN`, `_APP_SECRET` | Resmi (Graph API), butuh akun Meta Business terverifikasi. Belum dipakai klien — boilerplate siap pakai begitu akun terdaftar. |
+
+Aplikasi **menolak start** kalau `WHATSAPP_PROVIDER=meta` tapi salah satu dari keempat
+`WHATSAPP_META_*` di atas kosong.
+
+- **Baileys**: koneksi dikelola `src/lib/whatsapp/providers/baileys-provider.ts`, dimulai
+  sekali saat server boot (`instrumentation.ts`) kalau providernya aktif. Status
+  (`disconnected`/`connecting`/`qr_pending`/`connected`) dan QR code (sebagai gambar,
+  lewat `qrcode`) ditampilkan di `/admin/whatsapp`, di-poll otomatis selama belum
+  tersambung. Sesi (`WHATSAPP_SESSION_DIR`, default `whatsapp-session/`, **sengaja
+  digitignore** — sensitivitasnya sama seperti token sesi, siapa pun yang memegangnya
+  bisa kirim/terima pesan sebagai nomor yang tertaut) tersimpan setelah scan pertama
+  supaya reconnect berikutnya tidak perlu scan ulang.
+- **Meta Cloud API**: `src/lib/whatsapp/providers/meta-cloud-api.ts` + webhook di
+  `POST /api/v1/whatsapp/webhook` (verifikasi tanda tangan `X-Hub-Signature-256` lewat
+  HMAC-SHA256, dibandingkan constant-time). `GET` pada endpoint yang sama menangani
+  handshake verifikasi webhook Meta (`hub.challenge`). **Belum diuji dengan akun Meta
+  Business sungguhan** (klien belum punya) — hanya diverifikasi secara statis
+  (typecheck + bentuk request/response sesuai dokumentasi Graph API).
+- Keduanya memakai inti yang sama, `handleIncomingWhatsappMessage`
+  (`src/lib/whatsapp/handle-incoming-message.ts`): resolve nomor→user, cek rate limit,
+  panggil `askQuestion` (persis pipeline RAG chat web), format jawaban + sumber jadi
+  teks biasa untuk WhatsApp. Provider hanya berbeda di "bagaimana pesan masuk" dan
+  "bagaimana balasan dikirim".
+
+Manajemen nomor tertaut: `GET`/`POST /api/v1/admin/whatsapp/links`,
+`DELETE /api/v1/admin/whatsapp/links/:linkId` — role `admin` saja. Satu nomor hanya bisa
+tertaut ke satu akun dan sebaliknya (unique di kedua kolom); `POST` membalas `409` kalau
+nomor atau akun itu sudah tertaut ke pasangan lain. Setiap taut/lepas tercatat di audit
+log (`link_whatsapp_number` / `unlink_whatsapp_number`).
+
+**Status verifikasi:** skema DB, DTO, repository, usecase, controller, dan inti
+`handleIncomingWhatsappMessage` diuji end-to-end dengan integration test nyata (DB asli,
+model chat di-mock — 21 test baru) dan diverifikasi manual lewat `curl` terhadap server
+yang benar-benar berjalan (link/list/unlink, status endpoint). **Yang BELUM
+diverifikasi**: pairing QR dan kirim/terima pesan WhatsApp sungguhan (butuh nomor HP
+nyata, tidak bisa diuji otomatis) — kode providernya mengikuti pola resmi dokumentasi
+Baileys (`makeWASocket`, `useMultiFileAuthState`, event `connection.update`/
+`messages.upsert`), dan nama field pesan (`message.conversation`/
+`message.extendedTextMessage.text`) dikonfirmasi langsung dari source Baileys v7
+(`lib/Utils/messages.js`), tapi belum ada yang benar-benar scan QR dan chat lewat ponsel
+asli.
+
 ## Build produksi (smoke test)
 
 ```bash

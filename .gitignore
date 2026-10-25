@@ -49,5 +49,10 @@ next-env.d.ts
 /ocr-lang-data/*
 !/ocr-lang-data/.gitkeep
 
+# Baileys WhatsApp session credentials (whoever holds these can send/receive as the
+# linked phone number — never commit, same sensitivity class as a session token)
+/whatsapp-session/*
+!/whatsapp-session/.gitkeep
+
 # local Claude Code harness state (not part of the application)
 /.claude/
