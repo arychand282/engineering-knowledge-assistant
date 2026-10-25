@@ -107,6 +107,19 @@ describe("runOcrOnPages (real tesseract.js engine)", () => {
       env.OCR_LANG_DATA_DIR = original;
     }
   }, 30_000);
+
+  it("degrades gracefully (page stays ocr_required, no hang) when OCR_TIMEOUT_MS is exceeded", async () => {
+    const original = env.OCR_TIMEOUT_MS;
+    env.OCR_TIMEOUT_MS = 1; // real recognition always takes far longer than 1ms
+    try {
+      const pdf = buildTestScannedPdf("Tekanan maksimum boiler adalah 12 bar");
+      const classified = [{ pageNumber: 1, text: "", status: "ocr_required" as const }];
+      const result = await runOcrOnPages(new Uint8Array(pdf), classified);
+      expect(result).toEqual(classified);
+    } finally {
+      env.OCR_TIMEOUT_MS = original;
+    }
+  }, 30_000);
 });
 
 describe("createOcrWorker", () => {

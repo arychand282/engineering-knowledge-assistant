@@ -73,22 +73,69 @@ export interface OcrPageResult {
   confidence: number;
 }
 
-/** Renders one PDF page to an image and runs OCR on it. Caller owns the worker's lifecycle. */
+export class OcrTimeoutError extends Error {
+  constructor() {
+    super(`OCR melebihi batas waktu OCR_TIMEOUT_MS (${env.OCR_TIMEOUT_MS}ms).`);
+    this.name = "OcrTimeoutError";
+  }
+}
+
+// A rendered PDF page can declare an arbitrary MediaBox — without a cap, a hostile or
+// just malformed PDF could make createCanvas() try to allocate an enormous bitmap
+// (width/height are in device pixels after OCR_RENDER_SCALE is applied). 10000px is
+// generously above any real printed page at this scale, not a tuned value.
+const MAX_CANVAS_DIMENSION_PX = 10_000;
+
+/**
+ * Renders one PDF page to an image and runs OCR on it, bounded by OCR_TIMEOUT_MS.
+ * Caller owns the worker's lifecycle — but on timeout this terminates it directly,
+ * since racing a Promise only stops *this function* from waiting; the underlying
+ * tesseract worker_thread keeps running a hung job otherwise. That's a deliberate,
+ * acceptable tradeoff when the worker is reused across a document's remaining pages
+ * (runOcrOnPages): one page timing out abandons OCR for the rest of that document's
+ * pages too, which is the same safe degradation every other OCR failure path already
+ * has (they stay `ocr_required`, nothing is ever persisted as a false success).
+ */
 export async function ocrPage(worker: TesseractWorker, page: PDFPageProxy): Promise<OcrPageResult> {
   const viewport = page.getViewport({ scale: OCR_RENDER_SCALE });
-  const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const width = Math.ceil(viewport.width);
+  const height = Math.ceil(viewport.height);
+  if (width > MAX_CANVAS_DIMENSION_PX || height > MAX_CANVAS_DIMENSION_PX) {
+    throw new Error(
+      `Halaman terlalu besar untuk OCR (${width}x${height}px, batas ${MAX_CANVAS_DIMENSION_PX}px).`,
+    );
+  }
+  const canvas = createCanvas(width, height);
 
-  await page.render({
-    // @napi-rs/canvas's Canvas is API-compatible with the DOM HTMLCanvasElement pdfjs
-    // expects here — not the same class, hence the cast.
-    canvas: canvas as unknown as HTMLCanvasElement,
-    viewport,
-  }).promise;
+  const work = async (): Promise<OcrPageResult> => {
+    await page.render({
+      // @napi-rs/canvas's Canvas is API-compatible with the DOM HTMLCanvasElement
+      // pdfjs expects here — not the same class, hence the cast.
+      canvas: canvas as unknown as HTMLCanvasElement,
+      viewport,
+    }).promise;
 
-  const imageBuffer = canvas.toBuffer("image/png");
-  const { data } = await worker.recognize(imageBuffer);
+    const imageBuffer = canvas.toBuffer("image/png");
+    const { data } = await worker.recognize(imageBuffer);
 
-  return { text: data.text.trim(), confidence: data.confidence };
+    return { text: data.text.trim(), confidence: data.confidence };
+  };
+
+  let timeoutHandle: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new OcrTimeoutError()), env.OCR_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([work(), timeout]);
+  } catch (error) {
+    if (error instanceof OcrTimeoutError) {
+      await worker.terminate();
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle!);
+  }
 }
 
 /**

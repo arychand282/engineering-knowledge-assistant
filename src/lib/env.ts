@@ -41,6 +41,10 @@ const baseEnvSchema = z.object({
   // ocr:pull-language-data). NEVER defaults to tesseract.js's own CDN fallback — see
   // src/lib/documents/ocr.ts for why that matters (no implicit network calls).
   OCR_LANG_DATA_DIR: z.string().min(1).default("ocr-lang-data"),
+  // Bounds each page's render+recognize cycle (src/lib/documents/ocr.ts's ocrPage()) —
+  // a PDF with a pathological scanned page could otherwise hang a request indefinitely.
+  // On timeout the tesseract worker is terminated directly (racing a Promise alone
+  // doesn't stop the underlying worker_thread's in-progress job).
   OCR_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   // Below this (tesseract's own 0-100 confidence score), an OCR result is treated as
   // unreliable and discarded — the page stays `ocr_required` rather than persisting

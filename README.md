@@ -200,6 +200,14 @@ ambang confidence (atau kalau mesin OCR gagal/tidak tersedia), halaman tetap
 `ocr_required` apa adanya — **tidak pernah** menyimpan hasil OCR yang tidak yakin
 seolah-olah itu teks asli, dan tidak pernah menggagalkan keseluruhan upload.
 
+Dibatasi `OCR_TIMEOUT_MS` (default 120 detik) per halaman — kalau terlampaui, worker
+tesseract-nya langsung di-terminate (bukan sekadar berhenti menunggu, yang akan
+membiarkan proses OCR itu tetap berjalan di background) dan halaman tetap
+`ocr_required`. Juga ada batas dimensi render (10.000px) untuk mencegah PDF dengan
+ukuran halaman ekstrem memicu alokasi gambar raksasa. Keduanya ditemukan dan diperbaiki
+lewat security review sesi ini — sebelumnya `OCR_TIMEOUT_MS` ada di konfigurasi tapi
+tidak benar-benar diterapkan di mana pun.
+
 Butuh data bahasa di-pull sekali (`npm run ocr:pull-language-data`, default `ind+eng`
 sesuai `OCR_LANGUAGES`) ke `OCR_LANG_DATA_DIR` sebelum dipakai — lihat "Setup". Tanpa
 itu, OCR gagal dengan jelas (log `[ocr] Tidak dapat memulai worker OCR...`) dan halaman
