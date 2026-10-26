@@ -697,8 +697,9 @@ cookies.txt` disertakan di permintaan berikutnya.
   sungguhan dengan noise/kemiringan/kualitas rendah); `OCR_MIN_CONFIDENCE=60` adalah
   nilai awal yang wajar, belum dibenchmark terhadap dataset dokumen scan nyata.
   `isOcr`/`ocrConfidence` ditampilkan sebagai badge per halaman di `/documents/:id`,
-  tapi **belum** di kartu sumber chat — jawaban chat yang mengutip halaman hasil OCR
-  terlihat sama seperti kutipan dari teks asli, tidak ditandai kurang bisa dipercaya.
+  **dan sekarang juga** di kartu sumber chat/WhatsApp (badge "OCR XX%" di `/chat`,
+  anotasi `[hasil OCR]` di balasan WhatsApp) — jawaban chat yang mengutip halaman hasil
+  OCR sekarang ditandai, tidak lagi terlihat sama seperti kutipan dari teks asli.
 - **Memproses ulang dokumen (`POST .../reprocess`, tombol "Proses ulang" di
   `/documents/:id`) menghapus kutipan sumber pada pesan chat lama** yang pernah mengutip
   dokumen itu — ditemukan sebagai bug nyata (FK violation/500) saat fitur UI-nya

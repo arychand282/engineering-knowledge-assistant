@@ -14,6 +14,7 @@ import {
   conversations,
   documentAccess,
   documentChunks,
+  documentPages,
   documents,
   messageSources,
   roles,
@@ -136,13 +137,45 @@ describe("askQuestion", () => {
     expect(result.message.answerStatus).toBe("answered");
     expect(result.message.content).toContain("Teknisi bersertifikat");
     expect(result.sources).toHaveLength(1);
-    expect(result.sources[0].chunkId).toBe(chunk.id);
+    expect(result.sources[0]).toMatchObject({
+      chunkId: chunk.id,
+      documentTitle: "Dokumen Uji Chat",
+      isOcr: false,
+      ocrConfidence: null,
+    });
 
     const storedSources = await db
       .select()
       .from(messageSources)
       .where(inArray(messageSources.chunkId, [chunk.id]));
     expect(storedSources).toHaveLength(1);
+  });
+
+  it("surfaces OCR provenance (isOcr/ocrConfidence) on a source whose page was OCR'd", async () => {
+    const { doc, chunk } = await seedAccessibleChunk(
+      "Tekanan maksimum vessel adalah 15 bar menurut hasil scan dokumen ini.",
+    );
+    await db.insert(documentPages).values({
+      documentId: doc.id,
+      pageNumber: 1,
+      extractionStatus: "success",
+      isOcr: true,
+      ocrConfidence: 72,
+    });
+
+    mockedGenerateChatCompletion.mockResolvedValue(
+      JSON.stringify({
+        status: "answered",
+        answer: "Tekanan maksimum vessel adalah 15 bar.",
+        claims: [{ text: "15 bar.", source_chunk_ids: [chunk.id] }],
+      }),
+    );
+
+    const result = await askQuestion({ message: "Berapa tekanan maksimum vessel?", userId });
+    createdConversationIds.push(result.conversationId);
+
+    expect(result.sources).toHaveLength(1);
+    expect(result.sources[0]).toMatchObject({ isOcr: true, ocrConfidence: 72 });
   });
 
   it("downgrades to insufficient_evidence when the model cites a chunk id that was never retrieved", async () => {

@@ -85,8 +85,9 @@ function formatAnswerForWhatsapp(result: AskQuestionResult): string {
   if (result.sources.length > 0) {
     lines.push("", "_Sumber:_");
     for (const source of result.sources) {
+      const ocrNote = source.isOcr ? " [hasil OCR]" : "";
       lines.push(
-        `• ${source.documentTitle} (No. ${source.documentNumber}, rev. ${source.revision}, hal. ${source.pageNumber})`,
+        `• ${source.documentTitle} (No. ${source.documentNumber}, rev. ${source.revision}, hal. ${source.pageNumber})${ocrNote}`,
       );
     }
   }

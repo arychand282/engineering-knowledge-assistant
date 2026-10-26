@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { embedTexts } from "@/lib/ai/ollama-client";
 import { db, pool } from "@/lib/db";
-import { conversations, messages, users } from "@/lib/db/schema";
+import {
+  conversations,
+  documentChunks,
+  documentPages,
+  documents,
+  messages,
+  messageSources,
+  users,
+} from "@/lib/db/schema";
 import {
   getConversation,
   listConversations,
@@ -13,6 +22,22 @@ import { ConversationNotFoundError } from "@/server/usecases/chat/errors";
 let ownerId: string;
 let strangerId: string;
 const createdConversationIds: string[] = [];
+const createdDocumentIds: string[] = [];
+
+function fakeDocument(overrides: Partial<typeof documents.$inferInsert> & { uploadedBy: string }) {
+  return {
+    title: "Dokumen Uji Riwayat Chat",
+    documentNumber: `DOC-${randomUUID()}`,
+    documentType: "procedure",
+    revision: "2",
+    originalFilename: "uji.pdf",
+    mimeType: "application/pdf",
+    fileSize: 10,
+    sha256: randomUUID().replace(/-/g, "").padEnd(64, "0"),
+    storageKey: `documents/${randomUUID()}.pdf`,
+    ...overrides,
+  };
+}
 
 beforeAll(async () => {
   const [owner] = await db
@@ -29,6 +54,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.delete(conversations).where(inArray(conversations.id, createdConversationIds));
+  for (const id of createdDocumentIds) {
+    await db.delete(documents).where(inArray(documents.id, [id]));
+  }
   await db.delete(users).where(inArray(users.id, [ownerId, strangerId]));
   await pool.end();
 });
@@ -71,6 +99,64 @@ describe("manage-conversation usecases", () => {
     expect(result.messages[0].id).toBe(message.id);
     expect(result.messages[0].sources).toEqual([]);
   });
+
+  it("resolves documentTitle/documentNumber/revision and OCR provenance for a real source (regression: history view previously returned raw message_sources rows with no document join, so the chat UI's source card rendered 'undefined' for a reopened past conversation)", async () => {
+    const [doc] = await db
+      .insert(documents)
+      .values(fakeDocument({ uploadedBy: ownerId }))
+      .returning();
+    createdDocumentIds.push(doc.id);
+    await db.insert(documentPages).values({
+      documentId: doc.id,
+      pageNumber: 3,
+      extractionStatus: "success",
+      isOcr: true,
+      ocrConfidence: 87.5,
+    });
+    const [embedding] = await embedTexts(["Konten halaman hasil OCR."]);
+    const [chunk] = await db
+      .insert(documentChunks)
+      .values({
+        documentId: doc.id,
+        pageStart: 3,
+        pageEnd: 3,
+        chunkIndex: 0,
+        content: "Konten halaman hasil OCR.",
+        embedding,
+      })
+      .returning();
+
+    const [conversation] = await db.insert(conversations).values({ userId: ownerId }).returning();
+    createdConversationIds.push(conversation.id);
+    const [message] = await db
+      .insert(messages)
+      .values({
+        conversationId: conversation.id,
+        role: "assistant",
+        content: "jawaban",
+        answerStatus: "answered",
+      })
+      .returning();
+    await db.insert(messageSources).values({
+      messageId: message.id,
+      documentId: doc.id,
+      chunkId: chunk.id,
+      pageNumber: 3,
+      quotedText: "Konten halaman hasil OCR.",
+    });
+
+    const result = await getConversation(conversation.id, ownerId);
+
+    expect(result.messages[0].sources).toHaveLength(1);
+    expect(result.messages[0].sources[0]).toMatchObject({
+      documentTitle: doc.title,
+      documentNumber: doc.documentNumber,
+      revision: doc.revision,
+      pageNumber: 3,
+      isOcr: true,
+      ocrConfidence: 87.5,
+    });
+  }, 30_000);
 
   it("prevents a different user (IDOR) from reading someone else's conversation", async () => {
     const [conversation] = await db.insert(conversations).values({ userId: ownerId }).returning();

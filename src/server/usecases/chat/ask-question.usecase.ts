@@ -19,7 +19,10 @@ import {
   listMessagesByConversationId,
   type MessageRow,
 } from "@/server/repositories/message.repository";
-import { insertMessageSources } from "@/server/repositories/message-source.repository";
+import {
+  insertMessageSources,
+  listMessageSourcesByMessageId,
+} from "@/server/repositories/message-source.repository";
 import { searchDocuments } from "@/server/usecases/retrieval/search-documents.usecase";
 import { ConversationNotFoundError } from "./errors";
 
@@ -37,6 +40,8 @@ export interface AskQuestionSource {
   revision: string;
   pageNumber: number;
   quotedText: string;
+  isOcr: boolean;
+  ocrConfidence: number | null;
 }
 
 export interface AskQuestionResult {
@@ -189,7 +194,7 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
   }
   const finalSourceChunks = finalStatus === "answered" ? dedupedSourceChunks : [];
 
-  return finalizeTurn(conversation, finalAnswer, finalStatus, finalSourceChunks, contextDocuments);
+  return finalizeTurn(conversation, finalAnswer, finalStatus, finalSourceChunks);
 }
 
 /**
@@ -254,7 +259,6 @@ async function finalizeTurn(
   answer: string,
   status: MessageRow["answerStatus"],
   sourceChunks: RetrievalSourceChunk[],
-  knownDocuments?: DocumentRow[],
 ): Promise<AskQuestionResult> {
   const assistantMessage = await insertMessage({
     conversationId: conversation.id,
@@ -265,11 +269,7 @@ async function finalizeTurn(
 
   let sources: AskQuestionSource[] = [];
   if (sourceChunks.length > 0) {
-    const documentIds = [...new Set(sourceChunks.map((chunk) => chunk.documentId))];
-    const documents = knownDocuments ?? (await findDocumentsByIds(documentIds));
-    const documentById = new Map(documents.map((doc) => [doc.id, doc]));
-
-    const inserted = await insertMessageSources(
+    await insertMessageSources(
       sourceChunks.map((chunk) => ({
         messageId: assistantMessage.id,
         documentId: chunk.documentId,
@@ -279,18 +279,23 @@ async function finalizeTurn(
       })),
     );
 
-    sources = inserted.map((row) => {
-      const doc = documentById.get(row.documentId)!;
-      return {
-        documentId: row.documentId,
-        chunkId: row.chunkId,
-        documentTitle: doc.title,
-        documentNumber: doc.documentNumber,
-        revision: doc.revision,
-        pageNumber: row.pageNumber,
-        quotedText: row.quotedText,
-      };
-    });
+    // Re-read through the same joined query conversation history uses
+    // (listMessageSourcesByMessageId) rather than mapping documents in-memory here —
+    // one source of truth for what a "source" looks like (title/number/revision/OCR
+    // provenance), so the live chat response and a reopened past conversation always
+    // render identical source cards.
+    const rows = await listMessageSourcesByMessageId(assistantMessage.id);
+    sources = rows.map((row) => ({
+      documentId: row.documentId,
+      chunkId: row.chunkId,
+      documentTitle: row.documentTitle,
+      documentNumber: row.documentNumber,
+      revision: row.revision,
+      pageNumber: row.pageNumber,
+      quotedText: row.quotedText,
+      isOcr: row.isOcr ?? false,
+      ocrConfidence: row.ocrConfidence,
+    }));
   }
 
   await touchConversation(conversation.id);

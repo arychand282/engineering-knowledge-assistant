@@ -6,6 +6,8 @@ export interface ChatSourceView {
   revision: string;
   pageNumber: number;
   quotedText: string;
+  isOcr: boolean | null;
+  ocrConfidence: number | null;
 }
 
 export interface ChatMessageView {
