@@ -58,7 +58,7 @@ Membuktikan alur end-to-end berikut:
 - Prototype tidak boleh menyatakan bahwa semua jawaban pasti benar.
 - Jangan membuat keputusan keselamatan otomatis.
 - Jangan menganggap revisi dengan nomor tertinggi otomatis mengalahkan dokumen lain. Aturan hierarki dokumen harus ditentukan pemilik dokumen perusahaan.
-- WhatsApp bukan bagian wajib prototype awal karena layanan WhatsApp Business Platform melibatkan pihak eksternal. Integrasi hanya boleh dilakukan setelah kebijakan perusahaan mengizinkannya.
+- WhatsApp bukan bagian wajib prototype awal karena layanan WhatsApp Business Platform melibatkan pihak eksternal. Integrasi hanya boleh dilakukan setelah kebijakan perusahaan mengizinkannya. **Pengecualian:** klien secara eksplisit meminta chat via WhatsApp sebelum kebijakan formal tersedia — ditangani sebagai pengecualian terbatas/opt-in yang didokumentasikan secara eksplisit (sama pola dengan `CHAT_PROVIDER` di bawah), bukan sebagai "kebijakan sudah mengizinkan". Lihat §18 keputusan 9.
 - Jangan melakukan fine-tuning pada tahap awal. Mulai dengan model yang sudah dilatih dan pendekatan RAG.
 - Hindari istilah dan aturan domain tertentu yang tertanam di business logic. DAK hanyalah salah satu `document_type`/kategori yang dapat dikonfigurasi, bukan asumsi global aplikasi.
 - Satu instance hanya menyimpan data satu perusahaan. Tetap terapkan autentikasi, role-based access control, dan pembatasan akses berdasarkan cabang/pabrik, departemen, proyek, atau klasifikasi dokumen jika diperlukan. Dokumen tingkat perusahaan dapat diakses lintas cabang sesuai kebijakan akses.
@@ -107,7 +107,7 @@ Semua target harus diukur menggunakan dataset pertanyaan yang ditinjau engineer/
 
 ### Asumsi awal
 
-1. Prototype awal berbasis web, bukan WhatsApp.
+1. Prototype awal berbasis web, bukan WhatsApp. (WhatsApp ditambahkan belakangan sebagai pengecualian atas permintaan eksplisit klien — lihat §18 keputusan 9 — bukan direncanakan sejak awal.)
 2. Dokumen uji awal adalah dokumen dummy atau dokumen yang telah mendapat izin untuk digunakan.
 3. Dokumen PDF teks menjadi format prioritas.
 4. PDF hasil scan/OCR ditambahkan setelah alur PDF teks stabil.
@@ -149,7 +149,7 @@ Semua target harus diukur menggunakan dataset pertanyaan yang ditinjau engineer/
 
 ### Pilihan yang sengaja ditunda
 
-- WhatsApp Business API
+- ~~WhatsApp Business API~~ Sebagian diimplementasikan atas permintaan eksplisit klien (lihat §18 keputusan 9) — bukan lagi ditunda, tapi juga belum lewat persetujuan kebijakan formal.
 - Fine-tuning
 - Multi-agent orchestration
 - Qdrant atau vector database terpisah
@@ -534,6 +534,17 @@ Sumber jawaban disimpan secara terstruktur. UI mengambil referensi dari tabel in
 - `created_at`
 
 Jangan memasukkan password, token, API key, isi dokumen sensitif, atau prompt lengkap ke audit log secara default.
+
+### `whatsapp_links`
+
+- `id` UUID
+- `phone_number` unique — digit saja, format E.164 tanpa `+`
+- `user_id` unique — satu nomor hanya untuk satu akun dan sebaliknya (1:1, bukan direktori many-to-many)
+- `linked_by` nullable — admin yang menautkan
+- `current_conversation_id` nullable — percakapan yang sedang dilanjutkan nomor ini, sama pola dengan riwayat chat web
+- `created_at`
+
+Hanya dibuat oleh admin lewat `/admin/whatsapp` (lihat §18 keputusan 9) — WhatsApp tidak punya konsep login, jadi tabel ini adalah satu-satunya sumber identitas untuk nomor yang masuk. Nomor yang tidak ada baris di sini tidak pernah diberi akses.
 
 ---
 
@@ -1086,7 +1097,10 @@ Setiap test case mencatat pertanyaan, jawaban yang diharapkan, dokumen/revisi/ha
   2). Bukan cross-encoder sungguhan (Ollama tidak punya model rerank asli) — satu
   panggilan model chat tambahan yang menilai relevansi; latensi jadi pertimbangan,
   bukan gratis.
-- WhatsApp Business Platform hanya setelah persetujuan keamanan.
+- ~~WhatsApp Business Platform hanya setelah persetujuan keamanan.~~ **Sebagian
+  diimplementasikan** atas permintaan eksplisit klien, sebagai pengecualian terbatas —
+  bukan karena persetujuan keamanan formal sudah didapat (lihat §18 keputusan 9 untuk
+  syarat lengkapnya dan README "Chat lewat WhatsApp" untuk status verifikasi).
 - SSO perusahaan.
 - Deployment internal/air-gapped.
 - Monitoring dan backup produksi.
