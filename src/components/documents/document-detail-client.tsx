@@ -20,12 +20,43 @@ interface DocumentDetail {
   status: string;
   effectiveDate: string | null;
   supersedesDocumentId: string | null;
+  projectId: string | null;
+  siteId: string | null;
   approvedByEmail: string | null;
   approvedAt: string | null;
   originalFilename: string;
   mimeType: string;
   fileSize: number;
   createdAt: string;
+}
+
+interface CatalogOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
+interface OtherDocumentOption {
+  id: string;
+  title: string;
+  documentNumber: string;
+  revision: string;
+}
+
+interface MetadataDraft {
+  effectiveDate: string;
+  supersedesDocumentId: string;
+  projectId: string;
+  siteId: string;
+}
+
+function toMetadataDraft(doc: DocumentDetail): MetadataDraft {
+  return {
+    effectiveDate: doc.effectiveDate ?? "",
+    supersedesDocumentId: doc.supersedesDocumentId ?? "",
+    projectId: doc.projectId ?? "",
+    siteId: doc.siteId ?? "",
+  };
 }
 
 interface PageRow {
@@ -74,6 +105,31 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
   const [granting, setGranting] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
+  const [projects, setProjects] = useState<CatalogOption[]>([]);
+  const [sites, setSites] = useState<CatalogOption[]>([]);
+  const [otherDocuments, setOtherDocuments] = useState<OtherDocumentOption[]>([]);
+  const [metadataDraft, setMetadataDraft] = useState<MetadataDraft | null>(null);
+  const [savingMetadata, setSavingMetadata] = useState(false);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const [projectsRes, sitesRes, documentsRes] = await Promise.all([
+        apiFetch("/api/v1/projects"),
+        apiFetch("/api/v1/sites"),
+        apiFetch("/api/v1/documents?pageSize=100"),
+      ]);
+      const projectsData = await parseJsonOrThrow<{ items: CatalogOption[] }>(projectsRes);
+      const sitesData = await parseJsonOrThrow<{ items: CatalogOption[] }>(sitesRes);
+      const documentsData = await parseJsonOrThrow<{ items: OtherDocumentOption[] }>(documentsRes);
+      setProjects(projectsData.items);
+      setSites(sitesData.items);
+      setOtherDocuments(documentsData.items.filter((d) => d.id !== documentId));
+    } catch (err) {
+      setMetadataError(err instanceof Error ? err.message : "Gagal memuat daftar proyek/cabang.");
+    }
+  }, [documentId]);
+
   const loadAccess = useCallback(async () => {
     try {
       const res = await apiFetch(`/api/v1/documents/${documentId}/access`);
@@ -93,6 +149,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
         chunkCount: number;
       }>(res);
       setDocument(data.document);
+      setMetadataDraft((prev) => prev ?? toMetadataDraft(data.document));
       setPages(data.pages);
       setChunkCount(data.chunkCount);
     } catch (err) {
@@ -113,8 +170,9 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
     if (canManage) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadAccess();
+      void loadCatalog();
     }
-  }, [canManage, loadAccess]);
+  }, [canManage, loadAccess, loadCatalog]);
 
   async function handleGrant(e: React.FormEvent) {
     e.preventDefault();
@@ -170,6 +228,53 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       setError(err instanceof Error ? err.message : "Gagal memproses ulang dokumen.");
     } finally {
       setReprocessing(false);
+    }
+  }
+
+  async function handleSaveMetadata(e: React.FormEvent) {
+    e.preventDefault();
+    if (!metadataDraft || !document) {
+      return;
+    }
+    const original = toMetadataDraft(document);
+    // Empty string means "cleared" for a nullable field, which PATCH needs as an
+    // explicit `null` (an absent key means "leave unchanged") — see updateDocumentSchema
+    // in documents.dto.ts.
+    const patch: Record<string, string | null> = {};
+    if (metadataDraft.effectiveDate !== original.effectiveDate) {
+      patch.effectiveDate = metadataDraft.effectiveDate || null;
+    }
+    if (metadataDraft.supersedesDocumentId !== original.supersedesDocumentId) {
+      patch.supersedesDocumentId = metadataDraft.supersedesDocumentId || null;
+    }
+    if (metadataDraft.projectId !== original.projectId) {
+      patch.projectId = metadataDraft.projectId || null;
+    }
+    if (metadataDraft.siteId !== original.siteId) {
+      patch.siteId = metadataDraft.siteId || null;
+    }
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+
+    setSavingMetadata(true);
+    setMetadataError(null);
+    try {
+      const res = await apiFetch(`/api/v1/documents/${documentId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      await parseJsonOrThrow(res);
+      // Reload via GET rather than trusting the PATCH response body: PATCH returns the
+      // raw document row (only `approvedBy`, a UUID), while GET returns it joined with
+      // the approver's email (`approvedByEmail`) — using PATCH's response directly
+      // would silently blank the "Disetujui oleh" field already shown on this page.
+      await load();
+    } catch (err) {
+      setMetadataError(err instanceof Error ? err.message : "Gagal menyimpan metadata.");
+    } finally {
+      setSavingMetadata(false);
     }
   }
 
@@ -268,6 +373,95 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                 ? "embedding TERLEWAT (Ollama tidak aktif)"
                 : `${reprocessResult.embeddedCount} embedding dibuat`}
               .
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canManage && metadataDraft ? (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+            Metadata lanjutan
+          </h2>
+          <form
+            onSubmit={handleSaveMetadata}
+            className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4"
+          >
+            <label className="text-xs text-zinc-600 dark:text-zinc-400">
+              Tanggal efektif
+              <input
+                type="date"
+                value={metadataDraft.effectiveDate}
+                onChange={(e) =>
+                  setMetadataDraft({ ...metadataDraft, effectiveDate: e.target.value })
+                }
+                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="text-xs text-zinc-600 dark:text-zinc-400">
+              Menggantikan dokumen
+              <select
+                value={metadataDraft.supersedesDocumentId}
+                onChange={(e) =>
+                  setMetadataDraft({ ...metadataDraft, supersedesDocumentId: e.target.value })
+                }
+                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">(tidak ada)</option>
+                {otherDocuments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.title} (No. {d.documentNumber}, rev. {d.revision})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-zinc-600 dark:text-zinc-400">
+              Proyek
+              <select
+                value={metadataDraft.projectId}
+                onChange={(e) => setMetadataDraft({ ...metadataDraft, projectId: e.target.value })}
+                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">(tidak ada)</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.code})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-zinc-600 dark:text-zinc-400">
+              Cabang/pabrik
+              <select
+                value={metadataDraft.siteId}
+                onChange={(e) => setMetadataDraft({ ...metadataDraft, siteId: e.target.value })}
+                className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">(tidak ada)</option>
+                {sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.code})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="col-span-2 sm:col-span-4">
+              <button
+                type="submit"
+                disabled={savingMetadata}
+                className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                {savingMetadata ? "Menyimpan…" : "Simpan metadata"}
+              </button>
+            </div>
+          </form>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Proyek/cabang di sini hanya catatan metadata — belum ditegakkan sebagai pembatas akses
+            tambahan (lihat PLANNING.md §18 keputusan 12).
+          </p>
+          {metadataError ? (
+            <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+              {metadataError}
             </p>
           ) : null}
         </section>

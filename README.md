@@ -240,6 +240,10 @@ curl -b cookies.txt -X PATCH http://localhost:3000/api/v1/documents/<id> \
   -d '{"status": "effective", "effectiveDate": "2026-01-01"}'
 ```
 
+`projectId`/`siteId` dipilih dari daftar proyek/cabang yang aktif (`GET /api/v1/projects`,
+`GET /api/v1/sites` — read-only, role `admin`/`document_controller` saja; baris proyek/
+cabang sendiri masih diisi langsung lewat `psql`, belum ada API untuk mengelolanya).
+
 Setiap perubahan status/metadata tercatat di audit log (`update_document`). Saat status
 berubah MENJADI `effective` (dari status lain) untuk pertama kali, server otomatis
 mencatat `approvedBy` (user yang melakukan PATCH) dan `approvedAt` (waktu saat itu) —
@@ -684,9 +688,14 @@ cookies.txt` disertakan di permintaan berikutnya.
   kasus yang butuh dukungan browser lama atau subdomain yang tidak dipercaya.
 - `PATCH /api/v1/documents/:id` (ubah status/metadata; role `admin`/`document_controller`)
   punya UI di `/documents` (tombol "Edit" per baris, hanya tampil untuk role yang
-  berwenang) — tapi hanya untuk field inti (judul, nomor, tipe, revisi, status).
-  `effectiveDate`, `supersedesDocumentId`, `projectId`, `siteId` masih API-only, belum
-  ada form untuk itu.
+  berwenang) untuk field inti (judul, nomor, tipe, revisi, status), **dan sekarang juga**
+  bagian "Metadata lanjutan" di `/documents/:id` untuk `effectiveDate`,
+  `supersedesDocumentId` (dropdown dokumen lain), `projectId`, `siteId` (dropdown dari
+  `GET /api/v1/projects`/`GET /api/v1/sites`, dua endpoint read-only baru, role
+  `admin`/`document_controller` saja — proyek/cabang masih diisi langsung lewat `psql`,
+  belum ada API create/update/delete untuk itu). Mengisi `projectId`/`siteId` di sini
+  hanya mencatat metadata, **belum** menegakkan pembatas akses tambahan (lihat
+  "Pencarian dokumen" di atas dan PLANNING.md §18 keputusan 12).
 - `GET /api/v1/documents/:id/pages/:page` punya UI di `/documents/:id` (klik baris
   halaman untuk lazy-load dan menampilkan teksnya) — tapi hanya teks hasil ekstraksi,
   bukan render visual halaman PDF.
