@@ -474,11 +474,11 @@ pindah ke WhatsApp).
 WHATSAPP_PROVIDER=baileys   # atau: meta
 ```
 
-| `WHATSAPP_PROVIDER` | Butuh                                            | Catatan                                                              |
-| -------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
-| `none` (default)     | —                                                  | Tidak aktif.                                                           |
-| `baileys`            | Scan QR sekali di `/admin/whatsapp`                | **Tidak resmi** (protokol WhatsApp Web, bukan API Meta) — melanggar ToS WhatsApp, nomor yang ditautkan bisa diblokir. Hanya untuk demo/dev. |
-| `meta`               | `WHATSAPP_META_ACCESS_TOKEN`, `_PHONE_NUMBER_ID`, `_VERIFY_TOKEN`, `_APP_SECRET` | Resmi (Graph API), butuh akun Meta Business terverifikasi. Belum dipakai klien — boilerplate siap pakai begitu akun terdaftar. |
+| `WHATSAPP_PROVIDER` | Butuh                                                                            | Catatan                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none` (default)    | —                                                                                | Tidak aktif.                                                                                                                                |
+| `baileys`           | Scan QR sekali di `/admin/whatsapp`                                              | **Tidak resmi** (protokol WhatsApp Web, bukan API Meta) — melanggar ToS WhatsApp, nomor yang ditautkan bisa diblokir. Hanya untuk demo/dev. |
+| `meta`              | `WHATSAPP_META_ACCESS_TOKEN`, `_PHONE_NUMBER_ID`, `_VERIFY_TOKEN`, `_APP_SECRET` | Resmi (Graph API), butuh akun Meta Business terverifikasi. Belum dipakai klien — boilerplate siap pakai begitu akun terdaftar.              |
 
 Aplikasi **menolak start** kalau `WHATSAPP_PROVIDER=meta` tapi salah satu dari keempat
 `WHATSAPP_META_*` di atas kosong.
@@ -520,6 +520,25 @@ Baileys (`makeWASocket`, `useMultiFileAuthState`, event `connection.update`/
 `message.extendedTextMessage.text`) dikonfirmasi langsung dari source Baileys v7
 (`lib/Utils/messages.js`), tapi belum ada yang benar-benar scan QR dan chat lewat ponsel
 asli.
+
+**Bug nyata ditemukan lewat pembacaan source, bukan live test** (tidak bisa direproduksi
+tanpa koneksi WhatsApp sungguhan): event `messages.upsert` Baileys punya field `type:
+'append' | 'notify'` — `'append'` adalah pesan riwayat/offline yang disinkronkan ulang
+setiap (re)connect, BUKAN pesan baru. Tanpa memfilter ini, setiap reconnect (termasuk
+drop koneksi biasa, bukan hanya pairing pertama) akan menjalankan ulang pipeline RAG dan
+mengirim balasan WhatsApp duplikat untuk pesan-pesan lama yang sudah pernah dijawab.
+Sudah diperbaiki (`onMessagesUpsert` di `baileys-provider.ts` sekarang mengabaikan event
+yang `type`-nya bukan `'notify'`) — **tapi fix ini sendiri juga belum diverifikasi
+dengan reconnect WhatsApp sungguhan**, hanya lewat pembacaan tipe resmi Baileys
+(`lib/Types/Message.d.ts`, `lib/Types/Events.d.ts`).
+
+**Keterbatasan yang diketahui, belum diperbaiki** (provider `meta` belum pernah dipakai
+klien, jadi belum diprioritaskan): Meta Cloud API mengirim ulang webhook kalau server
+tidak membalas `200` cukup cepat — `handleMetaWebhookPayload` saat ini tidak melakukan
+deduplikasi berdasarkan `messages[].id` dari payload, jadi pengiriman ulang webhook yang
+sama berisiko menjawab dan mengirim balasan dua kali untuk pesan yang sama. Perlu
+penyimpanan id pesan yang sudah diproses (dengan TTL) sebelum fitur ini dipakai
+sungguhan.
 
 ## Build produksi (smoke test)
 

@@ -131,7 +131,17 @@ async function onMessagesUpsert(event: {
       extendedTextMessage?: { text?: string | null } | null;
     } | null;
   }>;
+  type: "append" | "notify";
 }): Promise<void> {
+  // "append" = historical/offline messages Baileys syncs in on (re)connect, not live
+  // incoming ones — only "notify" means "received while the connection was online"
+  // (per Baileys' own Events.d.ts doc comment). Without this check, every reconnect
+  // would re-run the RAG pipeline and re-send a WhatsApp reply for old messages that
+  // were already answered, potentially many at once.
+  if (event.type !== "notify") {
+    return;
+  }
+
   for (const message of event.messages) {
     const jid = message.key.remoteJid;
     // Only direct 1:1 chats, never this bot's own outgoing messages, never groups
