@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { env } from "@/lib/env";
 import { checkAiHealth } from "@/server/usecases/health/check-ai-health.usecase";
 import { checkHealth } from "@/server/usecases/health/check-health.usecase";
 
@@ -11,11 +12,14 @@ export async function getHealth() {
 
 export async function getAiHealth() {
   const report = await checkAiHealth();
-  // Embeddings always run on Ollama regardless of CHAT_PROVIDER. The chat model only
-  // needs to be present on Ollama when chat itself is configured to run there too.
+  // Ollama reachability only matters when something actually depends on it: embedding
+  // or chat configured to run there (EMBEDDING_PROVIDER/CHAT_PROVIDER=local), or the
+  // optional reranker (RERANK_ENABLED, always Ollama regardless of either provider).
+  const needsOllama =
+    report.embeddingProvider === "local" || report.chatProvider === "local" || env.RERANK_ENABLED;
   const isHealthy =
-    report.reachable &&
-    report.hasEmbeddingModel &&
+    (!needsOllama || report.reachable) &&
+    (report.embeddingProvider !== "local" || report.hasEmbeddingModel) &&
     (report.chatProvider !== "local" || report.hasChatModel);
 
   return NextResponse.json(report, { status: isHealthy ? 200 : 503 });

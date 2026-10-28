@@ -47,4 +47,36 @@ describe("env defaults", () => {
     expect(env.CHAT_PROVIDER).toBe("gemini");
     expect(env.GEMINI_API_KEY).toBe("test-key");
   });
+
+  it("defaults EMBEDDING_PROVIDER to local with no API key required", async () => {
+    delete process.env.EMBEDDING_PROVIDER;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+
+    const { env } = await import("@/lib/env");
+
+    expect(env.EMBEDDING_PROVIDER).toBe("local");
+  });
+
+  it.each(["gemini", "openai"] as const)(
+    "throws when EMBEDDING_PROVIDER=%s is set without its API key",
+    async (provider) => {
+      vi.stubEnv("EMBEDDING_PROVIDER", provider);
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      await expect(import("@/lib/env")).rejects.toThrow(/wajib diisi/);
+    },
+  );
+
+  it("loads successfully when EMBEDDING_PROVIDER and CHAT_PROVIDER are set independently", async () => {
+    vi.stubEnv("EMBEDDING_PROVIDER", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
+    vi.stubEnv("CHAT_PROVIDER", "local");
+
+    const { env } = await import("@/lib/env");
+
+    expect(env.EMBEDDING_PROVIDER).toBe("openai");
+    expect(env.CHAT_PROVIDER).toBe("local");
+  });
 });

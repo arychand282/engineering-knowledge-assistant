@@ -15,17 +15,18 @@ Aplikasi pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. L
 - Tailwind CSS
 - PostgreSQL + pgvector (via Docker Compose) dengan Drizzle ORM
 - `pdfjs-dist` untuk ekstraksi teks PDF per halaman (lokal, tanpa OCR/AI eksternal)
-- Ollama (via Docker Compose) untuk embedding lokal — model dev default `nomic-embed-text`
+- Ollama (via Docker Compose) untuk embedding lokal (default) — model dev default `nomic-embed-text`
 - Ollama untuk chat lokal — model dev default `qwen2.5:3b-instruct`
 - ESLint + Prettier
 - Vitest (unit dan integration test runner)
 - Zod (validasi environment dan, nantinya, validasi API)
 
 Sesuai `PLANNING.md`, aplikasi ini **tidak** mengirim dokumen atau prompt ke API AI
-eksternal, layanan embedding cloud, atau layanan OCR cloud — kecuali satu pengecualian
-opsional dan eksplisit (`CHAT_PROVIDER`, default tetap `local`) untuk demo di laptop tanpa
-GPU; lihat bagian "Chat RAG" di bawah. Embedding dan retrieval **selalu** lokal, tanpa
-kecuali, apa pun nilai `CHAT_PROVIDER`.
+eksternal, layanan embedding cloud, atau layanan OCR cloud — kecuali dua pengecualian
+opsional dan eksplisit, independen satu sama lain: `CHAT_PROVIDER` (default `local`)
+untuk demo di laptop tanpa GPU, dan `EMBEDDING_PROVIDER` (default `local`) untuk
+memakai embedding cloud alih-alih Ollama; lihat bagian "Chat RAG" di bawah untuk
+keduanya. Full-text retrieval **selalu** lokal, tanpa kecuali.
 
 Endpoint API berada di bawah `/api/v1/...` dan mengikuti pemisahan layer
 `route.ts` (thin HTTP binding) → `src/server/controllers` → `src/server/usecases` →
@@ -424,9 +425,9 @@ GEMINI_API_KEY=isi-key-kamu    # hanya wajib untuk provider yang dipilih
 Aplikasi **menolak start** dengan pesan error jelas kalau `CHAT_PROVIDER` diisi tapi API
 key yang sesuai kosong — tidak pernah diam-diam gagal. `GET /api/v1/health/ai`
 menampilkan `chatProvider` yang sedang aktif. Saat provider eksternal aktif, server log
-mencetak peringatan sekali di awal (nama provider + apa yang dikirim keluar). Embedding
-dan retrieval **tidak pernah** memakai provider eksternal ini — hanya langkah generasi
-jawaban chat.
+mencetak peringatan sekali di awal (nama provider + apa yang dikirim keluar). Full-text
+retrieval **tidak pernah** memakai provider eksternal ini — hanya langkah generasi
+jawaban chat. (Embedding punya flag terpisah, `EMBEDDING_PROVIDER` — lihat di bawah.)
 
 **Status verifikasi per provider:**
 
@@ -456,6 +457,41 @@ jawaban chat.
   ketat tapi belum diterapkan karena belum bisa diverifikasi tanpa key sungguhan. Kalau
   kamu test salah satu dengan key asli dan responsnya gagal validasi Zod (bukan error
   koneksi), ini kemungkinan besar penyebabnya — lihat `src/lib/ai/providers/`.
+
+#### Embedding eksternal (opsional, `EMBEDDING_PROVIDER`, default `local`)
+
+Permintaan eksplisit untuk juga bisa memilih provider embedding cloud, mirroring
+`CHAT_PROVIDER` di atas tapi independen — bisa dikombinasikan bebas dengan
+`CHAT_PROVIDER` apa pun. **Pengecualian eksplisit terhadap aturan "tanpa AI eksternal"
+yang sama** (lihat PLANNING.md bagian 8 "Mode Embedding Eksternal"). **Jangan dipakai
+dengan dokumen perusahaan sungguhan.**
+
+Beda penting dari `CHAT_PROVIDER`: mode ini mengirim **isi setiap chunk dokumen**
+(saat upload/reprocess), bukan hanya pertanyaan chat — dampaknya lebih luas.
+
+```bash
+# .env.local
+EMBEDDING_PROVIDER=gemini      # atau: openai
+GEMINI_API_KEY=isi-key-kamu    # hanya wajib untuk provider yang dipilih
+```
+
+| `EMBEDDING_PROVIDER` | Env var key wajib | Model default                 | Dimensi native (dipotong ke `EMBEDDING_DIMENSIONS`)     |
+| -------------------- | ----------------- | ----------------------------- | ------------------------------------------------------- |
+| `local` (default)    | —                 | `nomic-embed-text` via Ollama | 768                                                     |
+| `gemini`             | `GEMINI_API_KEY`  | `text-embedding-004`          | 768 (`outputDimensionality`)                            |
+| `openai`             | `OPENAI_API_KEY`  | `text-embedding-3-small`      | 1536, dipotong ke `EMBEDDING_DIMENSIONS` (`dimensions`) |
+
+`anthropic` **bukan** nilai yang valid untuk `EMBEDDING_PROVIDER` — Anthropic tidak
+punya API embedding publik. Aplikasi **menolak start** kalau `EMBEDDING_PROVIDER` diisi
+tapi API key yang sesuai kosong, sama seperti `CHAT_PROVIDER`. `GET /api/v1/health/ai`
+menampilkan `embeddingProvider` yang sedang aktif. Mengganti provider/model atau
+`EMBEDDING_DIMENSIONS` setelah ada data mengharuskan re-embedding seluruh
+`document_chunks` yang sudah ada — vektor dari provider berbeda tidak sebanding.
+
+**Status verifikasi:** belum diuji dengan API key sungguhan untuk Gemini maupun OpenAI
+(baru unit test mocked — bentuk request, auth header, parsing respons, pemotongan
+dimensi). Risiko yang sama seperti temuan Gemini chat di atas (field respons tidak
+sesuai asumsi kode) belum bisa disingkirkan sampai diuji nyata.
 
 ### Chat lewat WhatsApp (opsional, `WHATSAPP_PROVIDER`, default `none`)
 
@@ -653,11 +689,16 @@ cookies.txt` disertakan di permintaan berikutnya.
 - **Upload mengembalikan `422 "File tidak dapat dibaca sebagai PDF yang valid"`**: file
   bukan PDF yang bisa di-parse (bukan sekadar cek ekstensi) — PDF.js gagal membuka
   strukturnya. Pastikan file benar-benar PDF teks, bukan hasil scan yang rusak.
-- **Upload berhasil tapi `embeddingSkipped: true`**: Ollama tidak terjangkau. Cek
+- **Upload berhasil tapi `embeddingSkipped: true`**: provider embedding yang aktif
+  (`EMBEDDING_PROVIDER`, default `local`) tidak terjangkau. Kalau `local`: cek
   `npm run ai:up` sudah dijalankan dan `GET /api/v1/health/ai` → `hasEmbeddingModel: true`;
-  kalau belum, jalankan `npm run ai:pull-embedding-model`. Upload tidak perlu diulang —
-  jalankan `POST /api/v1/documents/:id/reprocess` setelah Ollama aktif untuk mengisi
-  embedding yang terlewat.
+  kalau belum, jalankan `npm run ai:pull-embedding-model`. Kalau `gemini`/`openai`: cek API
+  key dan konektivitas ke provider tersebut. Upload tidak perlu diulang — jalankan
+  `POST /api/v1/documents/:id/reprocess` setelah provider aktif untuk mengisi embedding
+  yang terlewat.
+- **Aplikasi gagal start dengan error `"..._API_KEY wajib diisi jika EMBEDDING_PROVIDER=..."`**:
+  sama seperti error `CHAT_PROVIDER` di bawah, tapi untuk `EMBEDDING_PROVIDER` — isi key-nya,
+  atau kembalikan `EMBEDDING_PROVIDER=local` (atau hapus barisnya) kalau tidak sengaja.
 - **`npm run test:integration` lambat atau gagal di `retrieval.test.ts`**: pastikan
   `npm run ai:up` dan `npm run ai:pull-embedding-model` sudah dijalankan — test ini
   memanggil Ollama sungguhan, bukan mock.

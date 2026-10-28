@@ -1,7 +1,11 @@
 import { llmAnswerGeminiSchema } from "@/lib/ai/answer-schema";
 import type { ChatMessage } from "@/lib/ai/ollama-client";
 import { env } from "@/lib/env";
-import { ChatProviderUnavailableError } from "./errors";
+import {
+  ChatProviderUnavailableError,
+  EmbeddingDimensionMismatchError,
+  EmbeddingProviderUnavailableError,
+} from "./errors";
 
 /**
  * Google Gemini. OPT-IN external provider — see PLANNING.md "Mode Chat Eksternal". Only
@@ -97,4 +101,74 @@ function extractTextFromSse(sseBody: string): string {
   }
 
   return combined;
+}
+
+interface GeminiEmbedResponse {
+  embeddings?: Array<{ values?: number[] }>;
+}
+
+/**
+ * Google Gemini embeddings. OPT-IN external provider — see PLANNING.md "Mode Embedding
+ * Eksternal". Only used when EMBEDDING_PROVIDER=gemini; never called otherwise.
+ *
+ * `outputDimensionality` asks Gemini to truncate its native vector to EMBEDDING_DIMENSIONS
+ * so every provider agrees on one fixed size for the shared pgvector column — the
+ * dimension check below still runs in case a future model/version ignores it.
+ */
+export async function embedTextsGemini(texts: string[]): Promise<number[][]> {
+  if (!env.GEMINI_API_KEY) {
+    throw new EmbeddingProviderUnavailableError("GEMINI_API_KEY tidak diisi.");
+  }
+
+  const url = new URL(
+    `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_EMBEDDING_MODEL}:batchEmbedContents`,
+  );
+  url.searchParams.set("key", env.GEMINI_API_KEY);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), env.EXTERNAL_EMBEDDING_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        requests: texts.map((text) => ({
+          model: `models/${env.GEMINI_EMBEDDING_MODEL}`,
+          content: { parts: [{ text }] },
+          outputDimensionality: env.EMBEDDING_DIMENSIONS,
+        })),
+      }),
+    });
+  } catch (error) {
+    throw new EmbeddingProviderUnavailableError("Gemini API tidak dapat dihubungi.", error);
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    throw new EmbeddingProviderUnavailableError(
+      `Gemini API mengembalikan HTTP ${response.status}.`,
+    );
+  }
+
+  const data = (await response.json()) as GeminiEmbedResponse;
+  const vectors = data.embeddings?.map((embedding) => embedding.values ?? []) ?? [];
+  if (vectors.length !== texts.length) {
+    throw new EmbeddingProviderUnavailableError("Gemini API tidak mengembalikan semua embedding.");
+  }
+
+  for (const vector of vectors) {
+    if (vector.length !== env.EMBEDDING_DIMENSIONS) {
+      throw new EmbeddingDimensionMismatchError(
+        env.GEMINI_EMBEDDING_MODEL,
+        env.EMBEDDING_DIMENSIONS,
+        vector.length,
+      );
+    }
+  }
+
+  return vectors;
 }

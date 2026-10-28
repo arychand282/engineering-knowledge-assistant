@@ -62,7 +62,7 @@ Membuktikan alur end-to-end berikut:
 - Jangan melakukan fine-tuning pada tahap awal. Mulai dengan model yang sudah dilatih dan pendekatan RAG.
 - Hindari istilah dan aturan domain tertentu yang tertanam di business logic. DAK hanyalah salah satu `document_type`/kategori yang dapat dikonfigurasi, bukan asumsi global aplikasi.
 - Satu instance hanya menyimpan data satu perusahaan. Tetap terapkan autentikasi, role-based access control, dan pembatasan akses berdasarkan cabang/pabrik, departemen, proyek, atau klasifikasi dokumen jika diperlukan. Dokumen tingkat perusahaan dapat diakses lintas cabang sesuai kebijakan akses.
-- Jangan mengirim data perusahaan ke OpenAI API, Anthropic API, Gemini API, layanan embedding cloud, layanan OCR cloud, atau layanan AI pihak ketiga lainnya. **Pengecualian tunggal, opsional, dan eksplisit:** `CHAT_PROVIDER` (default `local`) boleh diisi `gemini`/`openai`/`anthropic` untuk demo/dev di hardware tanpa GPU — lihat bagian 8 "Mode Chat Eksternal" untuk aturan lengkapnya. Embedding dan retrieval tidak pernah terpengaruh pengecualian ini.
+- Jangan mengirim data perusahaan ke OpenAI API, Anthropic API, Gemini API, layanan embedding cloud, layanan OCR cloud, atau layanan AI pihak ketiga lainnya. **Dua pengecualian opsional dan eksplisit, keduanya diputuskan independen satu sama lain:** `CHAT_PROVIDER` (default `local`) boleh diisi `gemini`/`openai`/`anthropic` untuk demo/dev di hardware tanpa GPU — lihat bagian 8 "Mode Chat Eksternal". `EMBEDDING_PROVIDER` (default `local`) boleh diisi `gemini`/`openai` untuk memakai embedding cloud alih-alih Ollama — lihat bagian 8 "Mode Embedding Eksternal". Full-text retrieval tetap selalu lokal, tidak terpengaruh pengecualian manapun.
 
 ---
 
@@ -338,7 +338,8 @@ engineering-knowledge-assistant/
 │   │   ├── retrieval/
 │   │   │   └── merge-results.ts
 │   │   ├── ai/
-│   │   │   ├── ollama-client.ts (lokal: embedding selalu, chat jika CHAT_PROVIDER=local)
+│   │   │   ├── ollama-client.ts (lokal: embedding jika EMBEDDING_PROVIDER=local, chat jika CHAT_PROVIDER=local)
+│   │   │   ├── embedding.ts (dispatcher — pilih provider berdasarkan EMBEDDING_PROVIDER)
 │   │   │   ├── chat-completion.ts (dispatcher — pilih provider berdasarkan CHAT_PROVIDER)
 │   │   │   ├── providers/
 │   │   │   │   ├── gemini-client.ts
@@ -605,7 +606,8 @@ Hanya dibuat oleh admin lewat `/admin/whatsapp` (lihat §18 keputusan 9) — Wha
 5. Jalankan pencarian hybrid: full-text search PostgreSQL dan vector similarity jika layak.
 6. Ambil kandidat chunk dan lakukan deduplikasi (Reciprocal Rank Fusion). **Opsional
    (`RERANK_ENABLED`, default false):** satu panggilan model chat LOKAL tambahan
-   (selalu Ollama, terlepas dari `CHAT_PROVIDER` — lihat "Mode Chat Eksternal" di bawah)
+   (selalu Ollama, terlepas dari `CHAT_PROVIDER` maupun `EMBEDDING_PROVIDER` — lihat
+   "Mode Chat Eksternal"/"Mode Embedding Eksternal" di bawah)
    menilai ulang relevansi kandidat sebelum `CHAT_RETRIEVAL_LIMIT` diambil. Kira-kira
    melipatgandakan latensi chat per pertanyaan — nonaktif secara default justru karena
    latensi CPU-only sudah jadi masalah nyata (lihat keputusan §18 #6). Gagal dengan
@@ -722,6 +724,57 @@ belum diterapkan karena belum terverifikasi). Detail lengkap ada di `README.md` 
 
 Lihat `README.md` bagian "Chat RAG" untuk cara mengaktifkan dan kode providernya di
 `src/lib/ai/providers/`.
+
+### Mode Embedding Eksternal (Opsional, Demo/Dev Only)
+
+**Ini adalah pengecualian eksplisit dan terbatas kedua terhadap batasan "jangan
+mengirim data ke API AI eksternal" di bagian 1 — pola yang sama dengan `CHAT_PROVIDER`
+di atas, didokumentasikan di sini secara terpisah karena memengaruhi langkah yang
+berbeda (embedding, bukan generasi jawaban), bukan diam-diam.**
+
+Ditambahkan atas permintaan eksplisit pengguna agar embedding juga bisa memakai
+provider cloud (Gemini/OpenAI) sebagai alternatif Ollama lokal, bukan hanya chat.
+Aplikasi menyediakan `EMBEDDING_PROVIDER` (env var, default **`local`**) yang bisa
+diisi `gemini` atau `openai` untuk memakai API cloud pihak ketiga sebagai pengganti
+Ollama **khusus untuk langkah embedding (saat upload dokumen maupun saat query chat)**.
+
+Aturan wajib untuk mode ini:
+
+1. **Default tetap `local`.** Tidak ada perilaku yang berubah kecuali seseorang secara
+   eksplisit mengubah `EMBEDDING_PROVIDER` di `.env.local`.
+2. **Independen dari `CHAT_PROVIDER`.** Kedua flag ini tidak saling memengaruhi — bisa
+   dikombinasikan bebas (misalnya `EMBEDDING_PROVIDER=local` + `CHAT_PROVIDER=gemini`,
+   atau sebaliknya). Reranker opsional (`RERANK_ENABLED`, §8 langkah 6) tetap selalu
+   lewat Ollama lokal (`src/lib/ai/rerank.ts`) terlepas dari KEDUA flag ini.
+3. **`anthropic` bukan nilai yang valid di sini** — Anthropic tidak punya API embedding
+   publik, hanya API chat (lihat `CHAT_PROVIDER` di atas untuk Anthropic).
+4. **Mengirim TEKS, bukan hanya pertanyaan chat.** Berbeda dengan `CHAT_PROVIDER` yang
+   hanya mengirim pertanyaan+chunk saat menjawab, mode ini mengirim isi setiap chunk
+   dokumen ke API eksternal **setiap kali dokumen diunggah/diproses**, selain
+   pertanyaan pengguna setiap kali chat mencari secara vektor. Dampaknya lebih luas
+   dari `CHAT_PROVIDER` — pertimbangkan ini sebelum mengaktifkan.
+5. **Jangan dipakai dengan dokumen perusahaan sungguhan/rahasia** sampai ada kebijakan
+   resmi perusahaan yang menyetujui vendor AI eksternal tertentu (lihat §18 keputusan 1
+   dan 7) — sama seperti `CHAT_PROVIDER`.
+6. Saat aktif, aplikasi mencetak peringatan di server log (sekali per proses) yang
+   menyebutkan provider mana yang aktif — lihat `src/lib/ai/embedding.ts`.
+7. API key (`GEMINI_API_KEY`/`OPENAI_API_KEY`) wajib diisi sesuai provider yang
+   dipilih; aplikasi menolak start (error jelas saat environment dimuat) jika
+   `EMBEDDING_PROVIDER` diisi tapi key yang sesuai kosong.
+8. Dimensi vektor tetap satu nilai global (`EMBEDDING_DIMENSIONS`, kolom pgvector
+   dibagi lintas provider) — Gemini (`outputDimensionality`) dan OpenAI (`dimensions`)
+   diminta memotong vektor native-nya ke nilai ini; validasi dimensi tetap berjalan di
+   `src/lib/ai/providers/errors.ts` (`EmbeddingDimensionMismatchError`) untuk ketiga
+   provider sebagai pengaman kalau API mengabaikan parameter tersebut.
+9. Model default per provider (`text-embedding-004`, `text-embedding-3-small`) dipilih
+   karena dimensi native-nya cocok dengan default `EMBEDDING_DIMENSIONS=768`, **bukan**
+   rekomendasi model produksi — belum melalui evaluasi kualitas atau persetujuan
+   lisensi/keamanan apa pun, dan **belum diuji dengan key sungguhan** (beda dengan
+   Gemini di `CHAT_PROVIDER` yang sudah diverifikasi end-to-end, lihat di atas).
+10. Mengganti `EMBEDDING_PROVIDER` (atau model/`EMBEDDING_DIMENSIONS`-nya) setelah data
+    ada mengharuskan re-embedding seluruh baris `document_chunks` yang sudah ada —
+    vektor dari provider/model berbeda tidak sebanding satu sama lain walau dimensinya
+    sama secara kebetulan.
 
 ---
 
@@ -1256,6 +1309,10 @@ Claude Code harus bekerja secara bertahap dan tidak mencoba membangun seluruh si
 - Buat vector search dan full-text search.
 - Terapkan filter akses dokumen di retrieval.
 - Tambahkan test relevansi dan kontrol akses.
+- *(Follow-up pasca-Task 5/7, atas permintaan eksplisit: ditambahkan `EMBEDDING_PROVIDER`
+  opsional (`gemini`/`openai`, mirroring `CHAT_PROVIDER`) — lihat bagian 8 "Mode
+  Embedding Eksternal". Bukan bagian dari Task 4 asli, didokumentasikan terpisah agar
+  jelas ini permintaan tambahan, bukan scope awal. Belum diuji dengan key sungguhan.)*
 
 **Task 5 — Local LLM chat**
 

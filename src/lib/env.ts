@@ -55,6 +55,18 @@ const baseEnvSchema = z.object({
   OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
   EMBEDDING_MODEL: z.string().min(1).default("nomic-embed-text"),
   OLLAMA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
+  // OPT-IN exception to "no external AI", same pattern as CHAT_PROVIDER below but
+  // documented separately (PLANNING.md "Mode Embedding Eksternal") because this one
+  // sends document chunk/query TEXT to a cloud API for the embedding step itself —
+  // default stays "local" so nothing changes unless explicitly configured.
+  EMBEDDING_PROVIDER: z.enum(["local", "gemini", "openai"]).default("local"),
+  EXTERNAL_EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // Models chosen for their native output matching the default EMBEDDING_DIMENSIONS
+  // (768) — both also support truncating to a custom EMBEDDING_DIMENSIONS value
+  // (Gemini's outputDimensionality / OpenAI's dimensions param), see providers/*.ts.
+  GEMINI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-004"),
+  OPENAI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
   CHAT_MODEL: z.string().min(1).default("qwen2.5:3b-instruct"),
   // CPU-only inference is slow (no GPU assumed for dev). Measured ~12 minutes for a
   // short answer on this project's dev sandbox — the default is set well above that.
@@ -178,6 +190,10 @@ export type Env = {
   OLLAMA_BASE_URL: string;
   EMBEDDING_MODEL: string;
   OLLAMA_REQUEST_TIMEOUT_MS: number;
+  EMBEDDING_PROVIDER: "local" | "gemini" | "openai";
+  EXTERNAL_EMBEDDING_TIMEOUT_MS: number;
+  GEMINI_EMBEDDING_MODEL: string;
+  OPENAI_EMBEDDING_MODEL: string;
   CHAT_MODEL: string;
   OLLAMA_CHAT_TIMEOUT_MS: number;
   CHAT_RETRIEVAL_LIMIT: number;
@@ -230,6 +246,10 @@ function loadEnv(): Env {
     OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
     EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
     OLLAMA_REQUEST_TIMEOUT_MS: process.env.OLLAMA_REQUEST_TIMEOUT_MS,
+    EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER,
+    EXTERNAL_EMBEDDING_TIMEOUT_MS: process.env.EXTERNAL_EMBEDDING_TIMEOUT_MS,
+    GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL,
+    OPENAI_EMBEDDING_MODEL: process.env.OPENAI_EMBEDDING_MODEL,
     CHAT_MODEL: process.env.CHAT_MODEL,
     OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
     CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
@@ -281,11 +301,18 @@ function loadEnv(): Env {
     openai: { key: data.OPENAI_API_KEY, envVar: "OPENAI_API_KEY" },
     anthropic: { key: data.ANTHROPIC_API_KEY, envVar: "ANTHROPIC_API_KEY" },
   };
-  const requiredKey = requiredKeyByProvider[data.CHAT_PROVIDER];
-  if (requiredKey && !requiredKey.key) {
+  const requiredChatKey = requiredKeyByProvider[data.CHAT_PROVIDER];
+  if (requiredChatKey && !requiredChatKey.key) {
     throw new Error(
-      `${requiredKey.envVar} wajib diisi jika CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
+      `${requiredChatKey.envVar} wajib diisi jika CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
         "CHAT_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
+    );
+  }
+  const requiredEmbeddingKey = requiredKeyByProvider[data.EMBEDDING_PROVIDER];
+  if (requiredEmbeddingKey && !requiredEmbeddingKey.key) {
+    throw new Error(
+      `${requiredEmbeddingKey.envVar} wajib diisi jika EMBEDDING_PROVIDER=${data.EMBEDDING_PROVIDER}. ` +
+        "EMBEDDING_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
     );
   }
 

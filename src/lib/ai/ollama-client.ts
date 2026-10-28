@@ -1,5 +1,6 @@
 import { llmAnswerJsonSchema } from "@/lib/ai/answer-schema";
 import { env } from "@/lib/env";
+import { EmbeddingDimensionMismatchError } from "./providers/errors";
 
 /**
  * Thin client for the local Ollama runtime. Never points at a cloud endpoint — the base
@@ -13,15 +14,10 @@ export class OllamaUnavailableError extends Error {
   }
 }
 
-export class EmbeddingDimensionMismatchError extends Error {
-  constructor(expected: number, actual: number) {
-    super(
-      `Model embedding "${env.EMBEDDING_MODEL}" mengembalikan vektor berdimensi ${actual}, ` +
-        `tetapi EMBEDDING_DIMENSIONS dikonfigurasi ${expected}.`,
-    );
-    this.name = "EmbeddingDimensionMismatchError";
-  }
-}
+// Re-exported for existing callers/tests importing it from this module — the class now
+// lives in providers/errors.ts since external embedding providers (gemini/openai) throw
+// it too (see src/lib/ai/embedding.ts).
+export { EmbeddingDimensionMismatchError };
 
 async function postJson(path: string, body: unknown, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -65,7 +61,11 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const data = (await response.json()) as OllamaEmbedResponse;
   for (const vector of data.embeddings) {
     if (vector.length !== env.EMBEDDING_DIMENSIONS) {
-      throw new EmbeddingDimensionMismatchError(env.EMBEDDING_DIMENSIONS, vector.length);
+      throw new EmbeddingDimensionMismatchError(
+        env.EMBEDDING_MODEL,
+        env.EMBEDDING_DIMENSIONS,
+        vector.length,
+      );
     }
   }
 
@@ -191,6 +191,7 @@ function parseNdjsonChatLine(line: string): string {
 
 export interface OllamaHealth {
   reachable: boolean;
+  /** Only meaningful when EMBEDDING_PROVIDER=local — external providers don't use Ollama for embedding. */
   hasEmbeddingModel: boolean;
   /** Only meaningful when CHAT_PROVIDER=local — external providers don't use Ollama for chat. */
   hasChatModel: boolean;

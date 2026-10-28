@@ -1,8 +1,8 @@
 import {
   EmbeddingDimensionMismatchError,
-  OllamaUnavailableError,
+  EmbeddingProviderUnavailableError,
   embedTexts,
-} from "@/lib/ai/ollama-client";
+} from "@/lib/ai/embedding";
 import { rerankChunkIds } from "@/lib/ai/rerank";
 import { env } from "@/lib/env";
 import { mergeRankedResults } from "@/lib/retrieval/merge-results";
@@ -25,7 +25,7 @@ export interface SearchResultItem extends ChunkSearchResult {
 
 export interface SearchDocumentsResult {
   results: SearchResultItem[];
-  /** false when the local embedding runtime was unreachable — results are full-text only. */
+  /** false when the configured embedding provider was unreachable — results are full-text only. */
   vectorSearchAvailable: boolean;
   /** true only when RERANK_ENABLED actually reordered results this call (not just configured). */
   reranked: boolean;
@@ -34,8 +34,9 @@ export interface SearchDocumentsResult {
 let warnedRerankSkippedExternalProvider = false;
 
 /**
- * Hybrid retrieval: full-text search always runs; vector search runs only if the local
- * embedding runtime responds. Access is filtered BEFORE either search runs — a user
+ * Hybrid retrieval: full-text search always runs; vector search runs only if the
+ * configured embedding provider (EMBEDDING_PROVIDER) responds. Access is filtered
+ * BEFORE either search runs — a user
  * with no accessible documents never reaches the database with their query
  * (PLANNING.md #10: "Filter akses harus diterapkan sebelum retrieval").
  *
@@ -79,7 +80,7 @@ export async function searchDocuments(input: SearchDocumentsInput): Promise<Sear
     );
   } catch (error) {
     if (
-      error instanceof OllamaUnavailableError ||
+      error instanceof EmbeddingProviderUnavailableError ||
       error instanceof EmbeddingDimensionMismatchError
     ) {
       vectorSearchAvailable = false;
