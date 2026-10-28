@@ -1,0 +1,1 @@
+ALTER TABLE "document_access" ADD CONSTRAINT "document_access_document_id_role_id_key" UNIQUE("document_id","role_id");

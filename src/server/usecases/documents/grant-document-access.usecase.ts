@@ -1,3 +1,4 @@
+import { isUniqueViolation } from "@/lib/db/errors";
 import { recordAuditEvent } from "@/server/repositories/audit-event.repository";
 import {
   findAccessGrantByRole,
@@ -34,7 +35,21 @@ export async function grantDocumentAccess(
     throw new DuplicateAccessGrantError(roleName);
   }
 
-  const grant = await insertAccessGrant(documentId, role.id);
+  // The SELECT above has a race window — a second concurrent request can read "no
+  // grant yet" too, and both proceed to INSERT. The DB-level unique constraint
+  // (document_access_document_id_role_id_key) stops the race from creating a second,
+  // silently-duplicate access-control row; catching it here turns the loser's error
+  // into the same clean 409 the winner's sequential check already returns, instead of
+  // an unhandled 500.
+  let grant: { id: string; createdAt: Date };
+  try {
+    grant = await insertAccessGrant(documentId, role.id);
+  } catch (error) {
+    if (isUniqueViolation(error, "document_access_document_id_role_id_key")) {
+      throw new DuplicateAccessGrantError(roleName);
+    }
+    throw error;
+  }
 
   await recordAuditEvent({
     actorUserId,

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db, pool } from "@/lib/db";
-import { auditEvents, documents, roles, userRoles, users } from "@/lib/db/schema";
+import { auditEvents, documentAccess, documents, roles, userRoles, users } from "@/lib/db/schema";
 import { getAccessibleDocumentIds } from "@/server/repositories/document-access.repository";
 import {
   AccessGrantNotFoundError,
@@ -114,6 +114,27 @@ describe("grantDocumentAccess", () => {
     await expect(
       grantDocumentAccess({ documentId: doc.id, roleName: "engineer", actorUserId: userId }),
     ).rejects.toBeInstanceOf(DuplicateAccessGrantError);
+  });
+
+  it("rejects a duplicate grant under a real race (concurrent requests, not sequential) — regression: the pre-insert SELECT check alone had a TOCTOU gap with nothing backing it at the DB level, so a race could silently create two access-control rows for the same document+role instead of one request winning and the other getting a clean 409", async () => {
+    const doc = await insertDoc();
+
+    const results = await Promise.allSettled([
+      grantDocumentAccess({ documentId: doc.id, roleName: "engineer", actorUserId: userId }),
+      grantDocumentAccess({ documentId: doc.id, roleName: "engineer", actorUserId: userId }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(DuplicateAccessGrantError);
+
+    const grants = await db
+      .select()
+      .from(documentAccess)
+      .where(and(eq(documentAccess.documentId, doc.id), eq(documentAccess.roleId, engineerRoleId)));
+    expect(grants).toHaveLength(1);
   });
 
   it("rejects an unknown role name", async () => {
