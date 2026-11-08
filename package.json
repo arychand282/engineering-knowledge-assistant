@@ -22,10 +22,12 @@
     "ai:pull-embedding-model": "tsx scripts/pull-model.ts",
     "ai:pull-chat-model": "tsx scripts/pull-model.ts qwen2.5:3b-instruct",
     "ocr:pull-language-data": "tsx scripts/pull-ocr-language-data.ts",
-    "seed:dev-user": "tsx scripts/seed-dev-user.ts"
+    "seed:dev-user": "tsx scripts/seed-dev-user.ts",
+    "reset-demo": "tsx scripts/reset-demo.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.13",
+    "@vercel/blob": "^2.8.2",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.2",

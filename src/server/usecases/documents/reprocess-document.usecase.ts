@@ -1,6 +1,6 @@
 import { extractDocumentPages } from "@/lib/documents/extract-document";
 import { env } from "@/lib/env";
-import { readStoredFile } from "@/lib/storage/local-storage";
+import { readStoredFile } from "@/lib/storage";
 import { findDocumentById } from "@/server/repositories/document.repository";
 import { deleteChunksByDocumentId } from "@/server/repositories/document-chunk.repository";
 import { deletePagesByDocumentId } from "@/server/repositories/document-page.repository";

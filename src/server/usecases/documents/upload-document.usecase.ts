@@ -5,7 +5,7 @@ import {
   resolveSupportedDocumentFormat,
 } from "@/lib/documents/metadata";
 import { env } from "@/lib/env";
-import { deleteStoredFile, saveFile } from "@/lib/storage/local-storage";
+import { deleteStoredFile, saveFile } from "@/lib/storage";
 import type { UploadDocumentMetadata } from "@/server/dto/documents.dto";
 import {
   findDocumentBySha256,

@@ -9,6 +9,15 @@ const baseEnvSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(768),
   STORAGE_DIR: z.string().min(1).default("storage"),
+  // OPT-IN exception for deployments without a persistent local filesystem across
+  // requests (e.g. Vercel Functions) — same class of override as CHAT_PROVIDER/
+  // EMBEDDING_PROVIDER below. Default "local" keeps today's filesystem behavior
+  // unchanged; "vercel-blob" swaps to src/lib/storage/vercel-blob-storage.ts via the
+  // dispatcher in src/lib/storage/index.ts.
+  STORAGE_PROVIDER: z.enum(["local", "vercel-blob"]).default("local"),
+  // Auto-injected by Vercel when a Blob store is connected to the project — only
+  // required when STORAGE_PROVIDER=vercel-blob.
+  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(50),
   MAX_DOCUMENT_PAGES: z.coerce.number().int().positive().default(1000),
   CHUNK_SIZE_WORDS: z.coerce.number().int().positive().default(700),
@@ -62,10 +71,13 @@ const baseEnvSchema = z.object({
   // default stays "local" so nothing changes unless explicitly configured.
   EMBEDDING_PROVIDER: z.enum(["local", "gemini", "openai"]).default("local"),
   EXTERNAL_EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
-  // Models chosen for their native output matching the default EMBEDDING_DIMENSIONS
-  // (768) — both also support truncating to a custom EMBEDDING_DIMENSIONS value
-  // (Gemini's outputDimensionality / OpenAI's dimensions param), see providers/*.ts.
-  GEMINI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-004"),
+  // GEMINI_EMBEDDING_MODEL default updated 2026-11: "text-embedding-004" was retired by
+  // Google (calls now 404) — "gemini-embedding-001" is the current GA replacement. Its
+  // native output is larger than the default EMBEDDING_DIMENSIONS (768), but both this
+  // model and OpenAI's support truncating via an explicit dimensions param
+  // (Gemini's outputDimensionality / OpenAI's dimensions param), see providers/*.ts —
+  // the dimension-mismatch check in _embed-chunks.ts/gemini-client.ts still guards this.
+  GEMINI_EMBEDDING_MODEL: z.string().min(1).default("gemini-embedding-001"),
   OPENAI_EMBEDDING_MODEL: z.string().min(1).default("text-embedding-3-small"),
   CHAT_MODEL: z.string().min(1).default("qwen2.5:3b-instruct"),
   // CPU-only inference is slow (no GPU assumed for dev). Measured ~12 minutes for a
@@ -111,6 +123,12 @@ const baseEnvSchema = z.object({
   OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5-20251001"),
+
+  // Authenticates Vercel Cron's call to /api/v1/admin/reset-demo (and manual calls to
+  // the same route). Optional at the schema level since most deployments of this app
+  // never need the reset route at all — only required in practice once CRON_SECRET-
+  // gated automation is actually wired up for a public demo deployment.
+  CRON_SECRET: z.string().min(1).optional(),
 
   SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
@@ -176,6 +194,8 @@ export type Env = {
   DATABASE_URL: string;
   EMBEDDING_DIMENSIONS: number;
   STORAGE_DIR: string;
+  STORAGE_PROVIDER: "local" | "vercel-blob";
+  BLOB_READ_WRITE_TOKEN?: string;
   MAX_UPLOAD_SIZE_MB: number;
   MAX_DOCUMENT_PAGES: number;
   CHUNK_SIZE_WORDS: number;
@@ -208,6 +228,7 @@ export type Env = {
   OPENAI_MODEL: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL: string;
+  CRON_SECRET?: string;
   SESSION_TTL_HOURS: number;
   LOGIN_RATE_LIMIT_MAX_ATTEMPTS: number;
   LOGIN_RATE_LIMIT_WINDOW_MS: number;
@@ -232,6 +253,8 @@ function loadEnv(): Env {
     DATABASE_URL: process.env.DATABASE_URL,
     EMBEDDING_DIMENSIONS: process.env.EMBEDDING_DIMENSIONS,
     STORAGE_DIR: process.env.STORAGE_DIR,
+    STORAGE_PROVIDER: process.env.STORAGE_PROVIDER,
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
     MAX_UPLOAD_SIZE_MB: process.env.MAX_UPLOAD_SIZE_MB,
     MAX_DOCUMENT_PAGES: process.env.MAX_DOCUMENT_PAGES,
     CHUNK_SIZE_WORDS: process.env.CHUNK_SIZE_WORDS,
@@ -264,6 +287,7 @@ function loadEnv(): Env {
     OPENAI_MODEL: process.env.OPENAI_MODEL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    CRON_SECRET: process.env.CRON_SECRET,
     SESSION_TTL_HOURS: process.env.SESSION_TTL_HOURS,
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
     LOGIN_RATE_LIMIT_WINDOW_MS: process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
@@ -313,6 +337,13 @@ function loadEnv(): Env {
     throw new Error(
       `${requiredEmbeddingKey.envVar} wajib diisi jika EMBEDDING_PROVIDER=${data.EMBEDDING_PROVIDER}. ` +
         "EMBEDDING_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
+    );
+  }
+
+  if (data.STORAGE_PROVIDER === "vercel-blob" && !data.BLOB_READ_WRITE_TOKEN) {
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN wajib diisi jika STORAGE_PROVIDER=vercel-blob " +
+        "(otomatis terisi oleh Vercel saat Blob store terhubung ke project).",
     );
   }
 
