@@ -332,6 +332,14 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
           No. {document.documentNumber} · Revisi {document.revision} ·{" "}
           {STATUS_LABELS[document.status] ?? document.status}
         </p>
+        <a
+          href={`/api/v1/documents/${documentId}/file`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 inline-block text-sm text-blue-600 underline dark:text-blue-400"
+        >
+          Buka file asli ({document.originalFilename})
+        </a>
       </section>
 
       <section className="grid grid-cols-2 gap-x-6 gap-y-2 rounded border border-zinc-200 p-3 text-sm dark:border-zinc-800 sm:grid-cols-3">

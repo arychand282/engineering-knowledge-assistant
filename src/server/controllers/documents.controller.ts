@@ -13,6 +13,7 @@ import {
 import { DOCUMENT_MANAGEMENT_ROLES } from "@/server/auth/roles";
 import { recordAuditEvent } from "@/server/repositories/audit-event.repository";
 import { getDocument } from "@/server/usecases/documents/get-document.usecase";
+import { getDocumentFile } from "@/server/usecases/documents/get-document-file.usecase";
 import { getDocumentPage } from "@/server/usecases/documents/get-document-page.usecase";
 import {
   AccessGrantNotFoundError,
@@ -187,6 +188,34 @@ export async function getDocumentById(_request: Request, context: RouteContext) 
   try {
     const result = await getDocument(paramsResult.data.id, actor);
     return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof DocumentNotFoundError) {
+      return jsonError(404, error.message);
+    }
+    throw error;
+  }
+}
+
+export async function getDocumentFileById(_request: Request, context: RouteContext) {
+  const actor = await resolveActor();
+  if (actor instanceof Response) {
+    return actor;
+  }
+
+  const paramsResult = documentIdParamSchema.safeParse(await context.params);
+  if (!paramsResult.success) {
+    return zodBadRequest(paramsResult.error);
+  }
+
+  try {
+    const { document, buffer } = await getDocumentFile(paramsResult.data.id, actor);
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "content-type": document.mimeType,
+        "content-disposition": `inline; filename="${document.originalFilename}"`,
+        "cache-control": "private, no-store",
+      },
+    });
   } catch (error) {
     if (error instanceof DocumentNotFoundError) {
       return jsonError(404, error.message);
