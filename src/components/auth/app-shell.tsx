@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [status, router]);
 
   if (status === "loading") {
-    return <p className="p-6 text-sm text-zinc-500 dark:text-zinc-400">Memuat…</p>;
+    return <p className="p-6 text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>;
   }
 
   if (status === "unauthenticated") {
@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             href="/documents"
             className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
           >
-            Dokumen
+            Documents
           </Link>
           {isAdmin ? (
             <Link
@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className="mx-auto flex max-w-4xl items-center gap-2 px-4 pb-3 text-xs text-zinc-500 dark:text-zinc-400">
           <span>
-            {user?.email} ({user?.roles.join(", ") || "tanpa role"})
+            {user?.email} ({user?.roles.join(", ") || "no role"})
           </span>
           <span className="flex-1" />
           <button

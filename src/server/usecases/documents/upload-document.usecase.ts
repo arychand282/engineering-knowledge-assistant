@@ -39,7 +39,7 @@ export async function uploadDocument(input: UploadDocumentInput): Promise<Upload
 
   const maxBytes = env.MAX_UPLOAD_SIZE_MB * 1024 * 1024;
   if (file.buffer.byteLength > maxBytes) {
-    throw new FileTooLargeError(`Ukuran file melebihi batas ${env.MAX_UPLOAD_SIZE_MB}MB.`);
+    throw new FileTooLargeError(`File size exceeds the ${env.MAX_UPLOAD_SIZE_MB}MB limit.`);
   }
 
   const sha256 = computeSha256(file.buffer);

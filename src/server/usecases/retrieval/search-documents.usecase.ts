@@ -51,8 +51,8 @@ export async function searchDocuments(input: SearchDocumentsInput): Promise<Sear
   if (env.RERANK_ENABLED && env.CHAT_PROVIDER !== "local" && !warnedRerankSkippedExternalProvider) {
     warnedRerankSkippedExternalProvider = true;
     console.warn(
-      `[search-documents] RERANK_ENABLED=true tapi CHAT_PROVIDER="${env.CHAT_PROVIDER}" — reranking ` +
-        "dilewati (reranker hanya memakai model lokal via Ollama, lihat src/lib/ai/rerank.ts).",
+      `[search-documents] RERANK_ENABLED=true but CHAT_PROVIDER="${env.CHAT_PROVIDER}" — reranking ` +
+        "skipped (the reranker only uses a local model via Ollama, see src/lib/ai/rerank.ts).",
     );
   }
   const candidateLimit = rerankEnabled ? Math.max(limit, env.RERANK_CANDIDATE_LIMIT) : limit;

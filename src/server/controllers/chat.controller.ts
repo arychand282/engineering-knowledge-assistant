@@ -27,7 +27,7 @@ export async function postChat(request: Request) {
   );
   if (!rateLimit.allowed) {
     return rateLimited(
-      "Terlalu banyak pertanyaan dalam waktu singkat. Coba lagi nanti.",
+      "Too many questions in a short period. Please try again later.",
       rateLimit.retryAfterMs,
     );
   }

@@ -71,7 +71,7 @@ export async function startBaileysConnection(): Promise<void> {
   } catch (error) {
     state.status = "disconnected";
     state.lastError = error instanceof Error ? error.message : String(error);
-    console.error("[whatsapp/baileys] Gagal memulai koneksi:", error);
+    console.error("[whatsapp/baileys] Failed to start connection:", error);
   } finally {
     starting = false;
   }
@@ -91,7 +91,7 @@ async function onConnectionUpdate(
       state.qrDataUrl = await toDataURL(qr);
       state.status = "qr_pending";
     } catch (error) {
-      console.error("[whatsapp/baileys] Gagal membuat QR code:", error);
+      console.error("[whatsapp/baileys] Failed to generate QR code:", error);
     }
   }
 
@@ -100,7 +100,7 @@ async function onConnectionUpdate(
     state.qrDataUrl = null;
     state.lastError = null;
     state.phoneNumber = sock?.user?.id?.split(":")[0]?.split("@")[0] ?? null;
-    console.log("[whatsapp/baileys] Terhubung sebagai", state.phoneNumber);
+    console.log("[whatsapp/baileys] Connected as", state.phoneNumber);
   }
 
   if (connection === "close") {
@@ -112,8 +112,8 @@ async function onConnectionUpdate(
       ?.output?.statusCode;
     const loggedOut = statusCode === DisconnectReason.loggedOut;
     state.lastError = loggedOut
-      ? "Sesi WhatsApp logout (di-unlink dari ponsel) — perlu scan QR lagi."
-      : "Koneksi WhatsApp terputus, mencoba menyambung ulang.";
+      ? "WhatsApp session logged out (unlinked from phone) — need to scan QR again."
+      : "WhatsApp connection lost, attempting to reconnect.";
     console.warn("[whatsapp/baileys]", state.lastError);
 
     if (!loggedOut) {
@@ -162,10 +162,10 @@ async function onMessagesUpsert(event: {
       const reply = await handleIncomingWhatsappMessage({ phoneNumber, text: text.trim() });
       await sock?.sendMessage(jid, { text: reply });
     } catch (error) {
-      console.error(`[whatsapp/baileys] Gagal memproses pesan dari ${phoneNumber}:`, error);
+      console.error(`[whatsapp/baileys] Failed to process message from ${phoneNumber}:`, error);
       await sock
         ?.sendMessage(jid, {
-          text: "Terjadi kesalahan saat memproses pertanyaan Anda. Silakan coba lagi.",
+          text: "An error occurred while processing your question. Please try again.",
         })
         .catch(() => {});
     }

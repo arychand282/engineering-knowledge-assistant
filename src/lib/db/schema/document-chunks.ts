@@ -4,9 +4,9 @@ import { env } from "@/lib/env";
 import { documents } from "./documents";
 
 /**
- * Dimensi embedding bersifat PROVISIONAL (lihat .env.example `EMBEDDING_DIMENSIONS`).
- * Mengubah nilai ini setelah migration pertama dijalankan membutuhkan migration baru
- * dan re-embedding seluruh baris document_chunks (PLANNING.md #7 tahap 4).
+ * Embedding dimensions are PROVISIONAL (see .env.example `EMBEDDING_DIMENSIONS`).
+ * Changing this value after the first migration has run requires a new migration
+ * and re-embedding every row in document_chunks (PLANNING.md #7 stage 4).
  */
 export const documentChunks = pgTable(
   "document_chunks",

@@ -20,7 +20,7 @@ export interface LoginResult {
 }
 
 /**
- * "Email atau password salah" is used for both an unknown email and a wrong password —
+ * "Incorrect email or password" is used for both an unknown email and a wrong password —
  * a distinct message for "unknown email" would let an attacker enumerate real accounts.
  */
 export async function login(input: LoginInput): Promise<LoginResult> {

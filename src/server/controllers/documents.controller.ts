@@ -85,7 +85,7 @@ export async function postDocument(request: Request) {
   );
   if (!rateLimit.allowed) {
     return rateLimited(
-      "Terlalu banyak upload dalam waktu singkat. Coba lagi nanti.",
+      "Too many uploads in a short period. Please try again later.",
       rateLimit.retryAfterMs,
     );
   }
@@ -295,7 +295,7 @@ export async function postReprocessDocument(_request: Request, context: RouteCon
   );
   if (!rateLimit.allowed) {
     return rateLimited(
-      "Terlalu banyak permintaan proses ulang dalam waktu singkat. Coba lagi nanti.",
+      "Too many reprocessing requests in a short period. Please try again later.",
       rateLimit.retryAfterMs,
     );
   }

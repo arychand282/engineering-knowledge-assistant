@@ -66,7 +66,7 @@ const baseEnvSchema = z.object({
   OLLAMA_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // OPT-IN exception to "no external AI", same pattern as CHAT_PROVIDER below but
-  // documented separately (PLANNING.md "Mode Embedding Eksternal") because this one
+  // documented separately (PLANNING.md "External Embedding Mode") because this one
   // sends document chunk/query TEXT to a cloud API for the embedding step itself —
   // default stays "local" so nothing changes unless explicitly configured.
   EMBEDDING_PROVIDER: z.enum(["local", "gemini", "openai"]).default("local"),
@@ -110,7 +110,7 @@ const baseEnvSchema = z.object({
   // still counts as one. Tune down if context windows get too large for the chat model.
   CHAT_HISTORY_LIMIT: z.coerce.number().int().min(0).default(10),
 
-  // OPT-IN exception to "no external AI" (PLANNING.md "Mode Chat Eksternal"), default
+  // OPT-IN exception to "no external AI" (PLANNING.md "External Chat Mode"), default
   // stays "local" so nothing changes unless explicitly configured. When set to a cloud
   // provider, the user's question + retrieved document chunk text are sent to that
   // provider's API — dev/demo convenience only, never for real company documents until

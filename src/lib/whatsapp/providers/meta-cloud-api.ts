@@ -100,6 +100,6 @@ async function sendMetaMessage(toPhoneNumber: string, text: string): Promise<voi
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Gagal mengirim pesan via Meta Cloud API (${response.status}): ${body}`);
+    throw new Error(`Failed to send message via Meta Cloud API (${response.status}): ${body}`);
   }
 }

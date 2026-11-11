@@ -25,7 +25,7 @@ export async function recordAuditEvent(event: NewAuditEvent): Promise<void> {
       metadata: event.metadata ?? null,
     });
   } catch (error) {
-    console.error("Gagal mencatat audit event", error);
+    console.error("Failed to record audit event", error);
   }
 }
 

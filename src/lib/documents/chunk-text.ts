@@ -24,7 +24,7 @@ interface PageWord {
 
 /**
  * Splits already-extracted page text into overlapping chunks while preserving which
- * PDF page(s) each chunk came from (PLANNING.md #7 tahap 3). Chunk size/overlap are a
+ * PDF page(s) each chunk came from (PLANNING.md #7 stage 3). Chunk size/overlap are a
  * word-count approximation of tokens — there is no external tokenizer dependency.
  * Only pass pages with extractable text; empty/ocr_required pages have nothing to chunk.
  */

@@ -1,6 +1,6 @@
 /**
  * Base roles (PLANNING.md #10). Task 6 finalizes the RBAC policy that #10 §355 left
- * open ("Kebijakan RBAC final ditentukan di Task 6"):
+ * open ("Final RBAC policy determined in Task 6"):
  *
  * - `admin` / `document_controller` manage the document catalog, so they can see and
  *   operate on every document regardless of `document_access` grants — otherwise they
