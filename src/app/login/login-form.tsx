@@ -1,11 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { apiFetch, parseJsonOrThrow } from "@/lib/client/api-client";
 
 export function LoginForm() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -22,10 +20,13 @@ export function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
       await parseJsonOrThrow(res);
-      router.replace("/");
-      router.refresh();
+      // Full page navigation (not router.replace/refresh) so the new session
+      // cookie is guaranteed to be picked up on the very first click — a
+      // client-side soft navigation here intermittently served a stale,
+      // pre-login render of "/" from the router cache.
+      window.location.href = "/";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal login.");
+      setError(err instanceof Error ? err.message : "Login failed.");
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +61,7 @@ export function LoginForm() {
         disabled={submitting}
         className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
       >
-        {submitting ? "Masuk…" : "Masuk"}
+        {submitting ? "Logging in…" : "Log in"}
       </button>
       {error ? (
         <p className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
