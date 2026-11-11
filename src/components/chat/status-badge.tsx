@@ -1,8 +1,8 @@
 const STATUS_LABELS: Record<string, string> = {
-  answered: "Terjawab",
-  insufficient_evidence: "Bukti tidak cukup",
-  conflict_detected: "Konflik terdeteksi",
-  needs_human_review: "Perlu tinjauan manusia",
+  answered: "Answered",
+  insufficient_evidence: "Insufficient evidence",
+  conflict_detected: "Conflict detected",
+  needs_human_review: "Needs human review",
   error: "Error",
 };
 

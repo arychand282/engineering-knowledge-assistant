@@ -14,9 +14,10 @@ import { users } from "./users";
 import { timestamps } from "./_shared";
 
 /**
- * Status alur dokumen (document control workflow), bukan kategori bisnis — tetap tetap
- * di seluruh perusahaan/industri sehingga aman sebagai enum DB. `document_type` sengaja
- * TIDAK dibuat enum karena kategorinya dikonfigurasi per perusahaan (lihat PLANNING.md #6).
+ * Document workflow status (document control workflow), not a business category — it
+ * stays the same across every company/industry, so it's safe as a DB enum. `document_type`
+ * is deliberately NOT an enum because its categories are configured per company (see
+ * PLANNING.md #6).
  */
 export const documentStatusEnum = pgEnum("document_status", [
   "draft",

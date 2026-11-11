@@ -42,7 +42,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       form.reset();
       onUploaded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengunggah dokumen.");
+      setError(err instanceof Error ? err.message : "Failed to upload the document.");
     } finally {
       setSubmitting(false);
     }
@@ -57,19 +57,19 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
         <input
           name="title"
           required
-          placeholder="Judul dokumen"
+          placeholder="Document title"
           className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
         <input
           name="documentNumber"
           required
-          placeholder="Nomor dokumen (mis. SOP-001)"
+          placeholder="Document number (e.g. SOP-001)"
           className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
         <input
           name="documentType"
           required
-          placeholder="Tipe (mis. procedure)"
+          placeholder="Type (e.g. procedure)"
           list="document-type-suggestions"
           className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
@@ -81,7 +81,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
         <input
           name="revision"
           required
-          placeholder="Revisi (mis. 0)"
+          placeholder="Revision (e.g. 0)"
           className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
       </div>
@@ -97,7 +97,7 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
         disabled={submitting}
         className="w-fit rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
       >
-        {submitting ? "Mengunggah…" : "Unggah PDF/DOCX"}
+        {submitting ? "Uploading…" : "Upload PDF/DOCX"}
       </button>
 
       {error ? (
@@ -107,12 +107,12 @@ export function UploadForm({ onUploaded }: { onUploaded: () => void }) {
       ) : null}
       {result ? (
         <p className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-          Berhasil: {result.pageCount} halaman, {result.chunkCount} potongan teks,{" "}
+          Success: {result.pageCount} pages, {result.chunkCount} chunks,{" "}
           {result.embeddingSkipped
-            ? "embedding TERLEWAT (Ollama tidak aktif)"
-            : `${result.embeddedCount} embedding dibuat`}
-          . Dokumen belum otomatis bisa dicari di chat — butuh izin akses (`document_access`) untuk
-          role pengguna, lihat README.
+            ? "embedding SKIPPED (Ollama is not active)"
+            : `${result.embeddedCount} embeddings created`}
+          . The document isn&apos;t automatically searchable in chat yet — it needs an access grant
+          (`document_access`) for the user&apos;s role; see README.
         </p>
       ) : null}
     </form>

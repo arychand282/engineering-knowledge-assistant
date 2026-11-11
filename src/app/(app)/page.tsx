@@ -7,21 +7,21 @@ export default function Home() {
         Engineering Knowledge Assistant
       </h1>
       <p className="max-w-md text-zinc-600 dark:text-zinc-400">
-        Pencarian dan tanya-jawab dokumen perusahaan yang dapat diverifikasi. Lihat{" "}
-        <code>PLANNING.md</code> untuk rencana kerja lengkap.
+        Verifiable search and Q&A over your company documents. See{" "}
+        <code>PLANNING.md</code> for the full project plan.
       </p>
       <div className="flex gap-3">
         <Link
           href="/chat"
           className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
         >
-          Mulai Chat
+          Start Chat
         </Link>
         <Link
           href="/documents"
           className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
         >
-          Kelola Dokumen
+          Manage Documents
         </Link>
       </div>
     </div>

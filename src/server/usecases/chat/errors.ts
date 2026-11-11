@@ -1,6 +1,6 @@
 export class ConversationNotFoundError extends Error {
   constructor(conversationId: string) {
-    super(`Percakapan ${conversationId} tidak ditemukan.`);
+    super(`Conversation ${conversationId} not found.`);
     this.name = "ConversationNotFoundError";
   }
 }

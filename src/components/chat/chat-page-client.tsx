@@ -31,7 +31,7 @@ export function ChatPageClient() {
       const data = await parseJsonOrThrow<{ items: ConversationSummary[] }>(res);
       setConversations(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat daftar percakapan.");
+      setError(err instanceof Error ? err.message : "Failed to load the conversation list.");
     }
   }, []);
 
@@ -54,7 +54,7 @@ export function ChatPageClient() {
       setConversationId(id);
       setMessages(data.messages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat percakapan.");
+      setError(err instanceof Error ? err.message : "Failed to load the conversation.");
     }
   }
 
@@ -73,7 +73,7 @@ export function ChatPageClient() {
       }
       await loadConversations();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menghapus percakapan.");
+      setError(err instanceof Error ? err.message : "Failed to delete the conversation.");
     }
   }
 
@@ -107,7 +107,7 @@ export function ChatPageClient() {
       setMessages((prev) => [...prev, { ...data.message, sources: data.sources }]);
       await loadConversations();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengirim pesan.");
+      setError(err instanceof Error ? err.message : "Failed to send the message.");
     } finally {
       setSending(false);
     }
@@ -121,7 +121,7 @@ export function ChatPageClient() {
           onClick={startNewConversation}
           className="w-full rounded border border-zinc-300 px-2 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
         >
-          + Percakapan baru
+          + New conversation
         </button>
         <ul className="space-y-1">
           {conversations.map((c) => (
@@ -135,13 +135,13 @@ export function ChatPageClient() {
                     : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 }`}
               >
-                <span className="truncate">{c.title ?? "(tanpa judul)"}</span>
+                <span className="truncate">{c.title ?? "(untitled)"}</span>
                 <span
                   role="button"
                   tabIndex={0}
                   onClick={(e) => deleteConversation(c.id, e)}
                   className="ml-1 shrink-0 text-zinc-400 opacity-0 hover:text-red-600 group-hover:opacity-100"
-                  aria-label="Hapus percakapan"
+                  aria-label="Delete conversation"
                 >
                   ✕
                 </span>
@@ -155,15 +155,15 @@ export function ChatPageClient() {
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto pb-3">
           {messages.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Belum ada pesan. Mulai dengan bertanya tentang dokumen yang sudah diunggah dan bisa
-              Anda akses.
+              No messages yet. Start by asking about a document you&apos;ve uploaded and have
+              access to.
             </p>
           ) : (
             messages.map((m) => <MessageBubble key={m.id} message={m} />)
           )}
           {sending ? (
             <p className="text-sm text-zinc-500 italic dark:text-zinc-400">
-              Sedang menyusun jawaban… (model lokal tanpa GPU bisa butuh beberapa menit)
+              Generating an answer… (a local model without a GPU can take a few minutes)
             </p>
           ) : null}
         </div>
@@ -178,7 +178,7 @@ export function ChatPageClient() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ketik pertanyaan Anda…"
+            placeholder="Type your question…"
             disabled={sending}
             className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           />
@@ -187,7 +187,7 @@ export function ChatPageClient() {
             disabled={sending || !input.trim()}
             className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
           >
-            Kirim
+            Send
           </button>
         </form>
       </section>

@@ -3,8 +3,8 @@ import { check, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 import { timestamps } from "./_shared";
 
 /**
- * Konfigurasi satu perusahaan untuk deployment ini. Hanya boleh berisi satu baris
- * (lihat PLANNING.md #6) — `id` dikunci ke 1 lewat CHECK constraint.
+ * Single-company configuration for this deployment. Must contain exactly one row
+ * (see PLANNING.md #6) — `id` is pinned to 1 via a CHECK constraint.
  */
 export const companySettings = pgTable(
   "company_settings",

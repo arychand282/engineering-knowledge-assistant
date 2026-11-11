@@ -20,7 +20,7 @@ function hasZipMagicBytes(buffer: Buffer): boolean {
 
 /**
  * Validates file content, not just the client-supplied extension/MIME type
- * (PLANNING.md #11: "Validasi file berdasarkan isi, bukan ekstensi saja"). Returns the
+ * (PLANNING.md #11: "Validate files by content, not just the extension"). Returns the
  * extension to store the file under, or null if neither the declared MIME type nor the
  * file's actual magic bytes match a supported format. Doesn't fully parse the DOCX
  * (OOXML) structure — that happens for real during LibreOffice conversion
@@ -45,8 +45,8 @@ export function computeSha256(buffer: Buffer): string {
 
 /**
  * Internal storage path derived from a random id, never the user-supplied filename
- * (PLANNING.md #7 tahap 1: "Gunakan UUID/internal storage key, bukan nama file dari
- * pengguna sebagai path"). The extension reflects the actual stored format (the
+ * (PLANNING.md #7 stage 1: "Use a UUID/internal storage key, not the user's filename,
+ * as the path"). The extension reflects the actual stored format (the
  * original uploaded file, not a converted derivative — see convert-docx.ts).
  */
 export function buildStorageKey(extension: SupportedDocumentExtension): string {

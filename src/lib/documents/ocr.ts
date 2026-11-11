@@ -8,9 +8,9 @@ import type { ExtractedPage } from "./extract-pdf";
 export class OcrUnavailableError extends Error {
   constructor(cause?: unknown) {
     super(
-      `Mesin OCR lokal tidak dapat dijalankan (tesseract.js, bahasa "${env.OCR_LANGUAGES}"). ` +
-        `Pastikan data bahasa sudah di-pull ke OCR_LANG_DATA_DIR ("${env.OCR_LANG_DATA_DIR}") ` +
-        "lewat `npm run ocr:pull-language-data` — lihat README.",
+      `The local OCR engine could not be started (tesseract.js, language "${env.OCR_LANGUAGES}"). ` +
+        `Make sure the language data has been pulled into OCR_LANG_DATA_DIR ("${env.OCR_LANG_DATA_DIR}") ` +
+        "via `npm run ocr:pull-language-data` — see the README.",
     );
     this.name = "OcrUnavailableError";
     this.cause = cause;
@@ -30,7 +30,7 @@ const OCR_RENDER_SCALE = 2;
  * tesseract.js's own default behavior (no langPath given) is to fetch language data
  * from a CDN at first use, which this project never does implicitly for anything
  * (PLANNING.md: no external AI/processing service without an explicit, documented
- * opt-in — see "Mode Chat Eksternal" for the one existing exception, which this isn't).
+ * opt-in — see "External Chat Mode" for the one existing exception, which this isn't).
  * cacheMethod 'none' skips tesseract's own filesystem cache lookup/write entirely, so
  * behavior is fully determined by what's actually in OCR_LANG_DATA_DIR.
  *
@@ -75,7 +75,7 @@ export interface OcrPageResult {
 
 export class OcrTimeoutError extends Error {
   constructor() {
-    super(`OCR melebihi batas waktu OCR_TIMEOUT_MS (${env.OCR_TIMEOUT_MS}ms).`);
+    super(`OCR exceeded the OCR_TIMEOUT_MS time limit (${env.OCR_TIMEOUT_MS}ms).`);
     this.name = "OcrTimeoutError";
   }
 }
@@ -102,7 +102,7 @@ export async function ocrPage(worker: TesseractWorker, page: PDFPageProxy): Prom
   const height = Math.ceil(viewport.height);
   if (width > MAX_CANVAS_DIMENSION_PX || height > MAX_CANVAS_DIMENSION_PX) {
     throw new Error(
-      `Halaman terlalu besar untuk OCR (${width}x${height}px, batas ${MAX_CANVAS_DIMENSION_PX}px).`,
+      `Page is too large for OCR (${width}x${height}px, limit ${MAX_CANVAS_DIMENSION_PX}px).`,
     );
   }
   const canvas = createCanvas(width, height);
@@ -161,7 +161,7 @@ export async function runOcrOnPages(
   try {
     worker = await createOcrWorker();
   } catch (error) {
-    console.error("[ocr] Tidak dapat memulai worker OCR, halaman tetap ocr_required:", error);
+    console.error("[ocr] Could not start the OCR worker, page remains ocr_required:", error);
     return pages;
   }
 
@@ -190,19 +190,19 @@ export async function runOcrOnPages(
           });
         } else {
           console.warn(
-            `[ocr] Halaman ${page.pageNumber}: confidence ${confidence.toFixed(1)} di bawah ` +
-              `OCR_MIN_CONFIDENCE (${env.OCR_MIN_CONFIDENCE}) atau teks kosong — tetap ocr_required.`,
+            `[ocr] Page ${page.pageNumber}: confidence ${confidence.toFixed(1)} is below ` +
+              `OCR_MIN_CONFIDENCE (${env.OCR_MIN_CONFIDENCE}) or text is empty — remains ocr_required.`,
           );
         }
       } catch (error) {
-        console.error(`[ocr] Gagal OCR halaman ${page.pageNumber}, tetap ocr_required:`, error);
+        console.error(`[ocr] OCR failed for page ${page.pageNumber}, remains ocr_required:`, error);
       }
     }
 
     return pages.map((page) => results.get(page.pageNumber) ?? page);
   } catch (error) {
     console.error(
-      "[ocr] Gagal membuka ulang PDF untuk OCR, semua halaman tetap ocr_required:",
+      "[ocr] Failed to reopen the PDF for OCR, all pages remain ocr_required:",
       error,
     );
     return pages;

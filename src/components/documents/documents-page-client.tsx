@@ -24,7 +24,7 @@ export function DocumentsPageClient() {
       const data = await parseJsonOrThrow<{ items: DocumentRowView[] }>(res);
       setDocuments(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat daftar dokumen.");
+      setError(err instanceof Error ? err.message : "Failed to load the document list.");
     }
   }, []);
 
@@ -40,7 +40,7 @@ export function DocumentsPageClient() {
       {canManage ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Unggah dokumen baru
+            Upload a new document
           </h2>
           <UploadForm onUploaded={loadDocuments} />
         </section>
@@ -48,7 +48,7 @@ export function DocumentsPageClient() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Daftar dokumen
+          Document list
         </h2>
         {error ? (
           <p className="mb-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">

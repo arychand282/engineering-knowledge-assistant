@@ -17,15 +17,15 @@ let warnedExternalProvider = false;
 /**
  * Single entry point the chat usecase calls — which provider actually runs is decided
  * entirely by CHAT_PROVIDER (default "local"/Ollama). This is the one place PLANNING.md's
- * "no external AI" exception is exercised; see PLANNING.md "Mode Chat Eksternal".
+ * "no external AI" exception is exercised; see PLANNING.md "External Chat Mode".
  */
 export async function generateChatCompletion(messages: ChatMessage[]): Promise<string> {
   if (env.CHAT_PROVIDER !== "local" && !warnedExternalProvider) {
     warnedExternalProvider = true;
     console.warn(
-      `[chat-completion] PERINGATAN: CHAT_PROVIDER="${env.CHAT_PROVIDER}" aktif — pertanyaan pengguna ` +
-        "dan potongan dokumen yang diambil akan dikirim ke API pihak ketiga ini. Mode demo/dev saja — " +
-        "jangan gunakan dengan dokumen perusahaan sungguhan (lihat PLANNING.md 'Mode Chat Eksternal').",
+      `[chat-completion] WARNING: CHAT_PROVIDER="${env.CHAT_PROVIDER}" is active — user questions ` +
+        "and retrieved document chunks will be sent to this third-party API. Demo/dev mode only — " +
+        "do not use with real company documents (see PLANNING.md 'External Chat Mode').",
     );
   }
 

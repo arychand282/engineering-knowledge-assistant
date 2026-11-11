@@ -123,7 +123,7 @@ export async function postWhatsappConnect() {
   }
 
   if (env.WHATSAPP_PROVIDER !== "baileys") {
-    return jsonError(400, "WHATSAPP_PROVIDER bukan 'baileys'.");
+    return jsonError(400, "WHATSAPP_PROVIDER is not 'baileys'.");
   }
   await startBaileysConnection();
   return NextResponse.json({ provider: "baileys", ...getBaileysStatus() });
@@ -131,7 +131,7 @@ export async function postWhatsappConnect() {
 
 export async function getWhatsappWebhook(request: Request) {
   if (env.WHATSAPP_PROVIDER !== "meta") {
-    return jsonError(404, "Provider WhatsApp bukan 'meta'.");
+    return jsonError(404, "WhatsApp provider is not 'meta'.");
   }
 
   const url = new URL(request.url);
@@ -142,14 +142,14 @@ export async function getWhatsappWebhook(request: Request) {
   });
 
   if (challenge === null) {
-    return jsonError(403, "Verifikasi webhook gagal.");
+    return jsonError(403, "Webhook verification failed.");
   }
   return new NextResponse(challenge, { status: 200 });
 }
 
 export async function postWhatsappWebhook(request: Request) {
   if (env.WHATSAPP_PROVIDER !== "meta") {
-    return jsonError(404, "Provider WhatsApp bukan 'meta'.");
+    return jsonError(404, "WhatsApp provider is not 'meta'.");
   }
 
   const rawBody = await request.text();
@@ -158,7 +158,7 @@ export async function postWhatsappWebhook(request: Request) {
     request.headers.get("x-hub-signature-256"),
   );
   if (!signatureValid) {
-    return jsonError(401, "Tanda tangan webhook tidak valid.");
+    return jsonError(401, "Invalid webhook signature.");
   }
 
   const payload = JSON.parse(rawBody);

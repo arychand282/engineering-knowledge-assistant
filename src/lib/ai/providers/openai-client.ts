@@ -7,12 +7,12 @@ import {
 } from "./errors";
 
 /**
- * OpenAI Chat Completions. OPT-IN external provider — see PLANNING.md "Mode Chat
- * Eksternal". Only used when CHAT_PROVIDER=openai; never called otherwise.
+ * OpenAI Chat Completions. OPT-IN external provider — see PLANNING.md "External Chat
+ * Mode". Only used when CHAT_PROVIDER=openai; never called otherwise.
  */
 export async function generateOpenAiChatCompletion(messages: ChatMessage[]): Promise<string> {
   if (!env.OPENAI_API_KEY) {
-    throw new ChatProviderUnavailableError("OPENAI_API_KEY tidak diisi.");
+    throw new ChatProviderUnavailableError("OPENAI_API_KEY is not set.");
   }
 
   const controller = new AbortController();
@@ -34,19 +34,19 @@ export async function generateOpenAiChatCompletion(messages: ChatMessage[]): Pro
       }),
     });
   } catch (error) {
-    throw new ChatProviderUnavailableError("OpenAI API tidak dapat dihubungi.", error);
+    throw new ChatProviderUnavailableError("Could not reach the OpenAI API.", error);
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
-    throw new ChatProviderUnavailableError(`OpenAI API mengembalikan HTTP ${response.status}.`);
+    throw new ChatProviderUnavailableError(`OpenAI API returned HTTP ${response.status}.`);
   }
 
   const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
   const text = data.choices?.[0]?.message?.content;
   if (!text) {
-    throw new ChatProviderUnavailableError("OpenAI API tidak mengembalikan konten jawaban.");
+    throw new ChatProviderUnavailableError("OpenAI API did not return any answer content.");
   }
 
   return text;
@@ -57,8 +57,8 @@ interface OpenAiEmbedResponse {
 }
 
 /**
- * OpenAI embeddings. OPT-IN external provider — see PLANNING.md "Mode Embedding
- * Eksternal". Only used when EMBEDDING_PROVIDER=openai; never called otherwise.
+ * OpenAI embeddings. OPT-IN external provider — see PLANNING.md "External Embedding
+ * Mode". Only used when EMBEDDING_PROVIDER=openai; never called otherwise.
  *
  * `dimensions` asks OpenAI to shorten the native vector to EMBEDDING_DIMENSIONS (only
  * supported by text-embedding-3-* models) so every provider agrees on one fixed size
@@ -66,7 +66,7 @@ interface OpenAiEmbedResponse {
  */
 export async function embedTextsOpenAi(texts: string[]): Promise<number[][]> {
   if (!env.OPENAI_API_KEY) {
-    throw new EmbeddingProviderUnavailableError("OPENAI_API_KEY tidak diisi.");
+    throw new EmbeddingProviderUnavailableError("OPENAI_API_KEY is not set.");
   }
 
   const controller = new AbortController();
@@ -88,21 +88,21 @@ export async function embedTextsOpenAi(texts: string[]): Promise<number[][]> {
       }),
     });
   } catch (error) {
-    throw new EmbeddingProviderUnavailableError("OpenAI API tidak dapat dihubungi.", error);
+    throw new EmbeddingProviderUnavailableError("Could not reach the OpenAI API.", error);
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
     throw new EmbeddingProviderUnavailableError(
-      `OpenAI API mengembalikan HTTP ${response.status}.`,
+      `OpenAI API returned HTTP ${response.status}.`,
     );
   }
 
   const data = (await response.json()) as OpenAiEmbedResponse;
   const entries = data.data ?? [];
   if (entries.length !== texts.length) {
-    throw new EmbeddingProviderUnavailableError("OpenAI API tidak mengembalikan semua embedding.");
+    throw new EmbeddingProviderUnavailableError("OpenAI API did not return all embeddings.");
   }
 
   const vectors = entries

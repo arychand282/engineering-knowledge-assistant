@@ -8,7 +8,7 @@ import {
 } from "./errors";
 
 /**
- * Google Gemini. OPT-IN external provider — see PLANNING.md "Mode Chat Eksternal". Only
+ * Google Gemini. OPT-IN external provider — see PLANNING.md "External Chat Mode". Only
  * used when CHAT_PROVIDER=gemini; never called otherwise.
  *
  * Uses `streamGenerateContent` (SSE), not the plain `generateContent` endpoint — the
@@ -19,7 +19,7 @@ import {
  */
 export async function generateGeminiChatCompletion(messages: ChatMessage[]): Promise<string> {
   if (!env.GEMINI_API_KEY) {
-    throw new ChatProviderUnavailableError("GEMINI_API_KEY tidak diisi.");
+    throw new ChatProviderUnavailableError("GEMINI_API_KEY is not set.");
   }
 
   const systemMessage = messages.find((m) => m.role === "system");
@@ -55,19 +55,19 @@ export async function generateGeminiChatCompletion(messages: ChatMessage[]): Pro
       }),
     });
   } catch (error) {
-    throw new ChatProviderUnavailableError("Gemini API tidak dapat dihubungi.", error);
+    throw new ChatProviderUnavailableError("Could not reach the Gemini API.", error);
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
-    throw new ChatProviderUnavailableError(`Gemini API mengembalikan HTTP ${response.status}.`);
+    throw new ChatProviderUnavailableError(`Gemini API returned HTTP ${response.status}.`);
   }
 
   const body = await response.text();
   const text = extractTextFromSse(body);
   if (!text) {
-    throw new ChatProviderUnavailableError("Gemini API tidak mengembalikan konten jawaban.");
+    throw new ChatProviderUnavailableError("Gemini API did not return any answer content.");
   }
 
   return text;
@@ -108,8 +108,8 @@ interface GeminiEmbedResponse {
 }
 
 /**
- * Google Gemini embeddings. OPT-IN external provider — see PLANNING.md "Mode Embedding
- * Eksternal". Only used when EMBEDDING_PROVIDER=gemini; never called otherwise.
+ * Google Gemini embeddings. OPT-IN external provider — see PLANNING.md "External
+ * Embedding Mode". Only used when EMBEDDING_PROVIDER=gemini; never called otherwise.
  *
  * `outputDimensionality` asks Gemini to truncate its native vector to EMBEDDING_DIMENSIONS
  * so every provider agrees on one fixed size for the shared pgvector column — the
@@ -117,7 +117,7 @@ interface GeminiEmbedResponse {
  */
 export async function embedTextsGemini(texts: string[]): Promise<number[][]> {
   if (!env.GEMINI_API_KEY) {
-    throw new EmbeddingProviderUnavailableError("GEMINI_API_KEY tidak diisi.");
+    throw new EmbeddingProviderUnavailableError("GEMINI_API_KEY is not set.");
   }
 
   const url = new URL(
@@ -143,21 +143,21 @@ export async function embedTextsGemini(texts: string[]): Promise<number[][]> {
       }),
     });
   } catch (error) {
-    throw new EmbeddingProviderUnavailableError("Gemini API tidak dapat dihubungi.", error);
+    throw new EmbeddingProviderUnavailableError("Could not reach the Gemini API.", error);
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
     throw new EmbeddingProviderUnavailableError(
-      `Gemini API mengembalikan HTTP ${response.status}.`,
+      `Gemini API returned HTTP ${response.status}.`,
     );
   }
 
   const data = (await response.json()) as GeminiEmbedResponse;
   const vectors = data.embeddings?.map((embedding) => embedding.values ?? []) ?? [];
   if (vectors.length !== texts.length) {
-    throw new EmbeddingProviderUnavailableError("Gemini API tidak mengembalikan semua embedding.");
+    throw new EmbeddingProviderUnavailableError("Gemini API did not return all embeddings.");
   }
 
   for (const vector of vectors) {

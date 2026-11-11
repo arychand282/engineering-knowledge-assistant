@@ -126,7 +126,9 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       setSites(sitesData.items);
       setOtherDocuments(documentsData.items.filter((d) => d.id !== documentId));
     } catch (err) {
-      setMetadataError(err instanceof Error ? err.message : "Gagal memuat daftar proyek/cabang.");
+      setMetadataError(
+        err instanceof Error ? err.message : "Failed to load the projects/sites list.",
+      );
     }
   }, [documentId]);
 
@@ -136,7 +138,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       const data = await parseJsonOrThrow<{ items: AccessGrant[] }>(res);
       setAccessGrants(data.items);
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : "Gagal memuat daftar akses.");
+      setAccessError(err instanceof Error ? err.message : "Failed to load the access list.");
     }
   }, [documentId]);
 
@@ -153,7 +155,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       setPages(data.pages);
       setChunkCount(data.chunkCount);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat detail dokumen.");
+      setError(err instanceof Error ? err.message : "Failed to load document details.");
     }
   }, [documentId]);
 
@@ -187,7 +189,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       await parseJsonOrThrow(res);
       await loadAccess();
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : "Gagal memberi akses.");
+      setAccessError(err instanceof Error ? err.message : "Failed to grant access.");
     } finally {
       setGranting(false);
     }
@@ -201,11 +203,11 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
         method: "DELETE",
       });
       if (!res.ok) {
-        throw new Error((await res.json().catch(() => null))?.error ?? "Gagal mencabut akses.");
+        throw new Error((await res.json().catch(() => null))?.error ?? "Failed to revoke access.");
       }
       await loadAccess();
     } catch (err) {
-      setAccessError(err instanceof Error ? err.message : "Gagal mencabut akses.");
+      setAccessError(err instanceof Error ? err.message : "Failed to revoke access.");
     } finally {
       setRevokingId(null);
     }
@@ -225,7 +227,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       setExpandedPage(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memproses ulang dokumen.");
+      setError(err instanceof Error ? err.message : "Failed to reprocess the document.");
     } finally {
       setReprocessing(false);
     }
@@ -269,10 +271,10 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       // Reload via GET rather than trusting the PATCH response body: PATCH returns the
       // raw document row (only `approvedBy`, a UUID), while GET returns it joined with
       // the approver's email (`approvedByEmail`) — using PATCH's response directly
-      // would silently blank the "Disetujui oleh" field already shown on this page.
+      // would silently blank the "Approved by" field already shown on this page.
       await load();
     } catch (err) {
-      setMetadataError(err instanceof Error ? err.message : "Gagal menyimpan metadata.");
+      setMetadataError(err instanceof Error ? err.message : "Failed to save metadata.");
     } finally {
       setSavingMetadata(false);
     }
@@ -294,7 +296,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       const data = await parseJsonOrThrow<{ page: { extractedText: string | null } }>(res);
       setPageTextByNumber((prev) => ({ ...prev, [pageNumber]: data.page.extractedText ?? "" }));
     } catch (err) {
-      setPageTextError(err instanceof Error ? err.message : "Gagal memuat teks halaman.");
+      setPageTextError(err instanceof Error ? err.message : "Failed to load page text.");
     } finally {
       setLoadingPageNumber(null);
     }
@@ -315,7 +317,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
     return (
       <div className="space-y-2">
         <BackLink />
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Memuat…</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
       </div>
     );
   }
@@ -329,7 +331,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
           {document.title}
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          No. {document.documentNumber} · Revisi {document.revision} ·{" "}
+          No. {document.documentNumber} · Revision {document.revision} ·{" "}
           {STATUS_LABELS[document.status] ?? document.status}
         </p>
         <a
@@ -338,25 +340,25 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
           rel="noopener noreferrer"
           className="mt-2 inline-block text-sm text-blue-600 underline dark:text-blue-400"
         >
-          Buka file asli ({document.originalFilename})
+          Open original file ({document.originalFilename})
         </a>
       </section>
 
       <section className="grid grid-cols-2 gap-x-6 gap-y-2 rounded border border-zinc-200 p-3 text-sm dark:border-zinc-800 sm:grid-cols-3">
-        <Field label="Tipe" value={document.documentType} />
-        <Field label="Tanggal efektif" value={document.effectiveDate ?? <Dash />} />
-        <Field label="Jumlah potongan teks" value={String(chunkCount)} />
-        <Field label="Disetujui oleh" value={document.approvedByEmail ?? <Dash />} />
+        <Field label="Type" value={document.documentType} />
+        <Field label="Effective date" value={document.effectiveDate ?? <Dash />} />
+        <Field label="Chunk count" value={String(chunkCount)} />
+        <Field label="Approved by" value={document.approvedByEmail ?? <Dash />} />
         <Field
-          label="Disetujui pada"
+          label="Approved on"
           value={
-            document.approvedAt ? new Date(document.approvedAt).toLocaleString("id-ID") : <Dash />
+            document.approvedAt ? new Date(document.approvedAt).toLocaleString("en-US") : <Dash />
           }
         />
-        <Field label="Diunggah" value={new Date(document.createdAt).toLocaleString("id-ID")} />
-        <Field label="Nama file asli" value={document.originalFilename} />
-        <Field label="Tipe file" value={document.mimeType} />
-        <Field label="Ukuran file" value={`${(document.fileSize / 1024).toFixed(1)} KB`} />
+        <Field label="Uploaded" value={new Date(document.createdAt).toLocaleString("en-US")} />
+        <Field label="Original filename" value={document.originalFilename} />
+        <Field label="File type" value={document.mimeType} />
+        <Field label="File size" value={`${(document.fileSize / 1024).toFixed(1)} KB`} />
       </section>
 
       {canManage ? (
@@ -367,19 +369,18 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
             onClick={handleReprocess}
             className="rounded bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
           >
-            {reprocessing ? "Memproses ulang…" : "Proses ulang dokumen"}
+            {reprocessing ? "Reprocessing…" : "Reprocess document"}
           </button>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Mengekstrak ulang dari file yang tersimpan (berguna setelah mengaktifkan
-            OCR/LibreOffice, atau memperbaiki ekstraksi yang gagal).
+            Re-extracts from the stored file (useful after enabling OCR/LibreOffice, or to fix a
+            failed extraction).
           </p>
           {reprocessResult ? (
             <p className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
-              Berhasil: {reprocessResult.pageCount} halaman, {reprocessResult.chunkCount} potongan
-              teks,{" "}
+              Success: {reprocessResult.pageCount} pages, {reprocessResult.chunkCount} chunks,{" "}
               {reprocessResult.embeddingSkipped
-                ? "embedding TERLEWAT (Ollama tidak aktif)"
-                : `${reprocessResult.embeddedCount} embedding dibuat`}
+                ? "embedding SKIPPED (Ollama is not active)"
+                : `${reprocessResult.embeddedCount} embeddings created`}
               .
             </p>
           ) : null}
@@ -389,14 +390,14 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       {canManage && metadataDraft ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Metadata lanjutan
+            Advanced metadata
           </h2>
           <form
             onSubmit={handleSaveMetadata}
             className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4"
           >
             <label className="text-xs text-zinc-600 dark:text-zinc-400">
-              Tanggal efektif
+              Effective date
               <input
                 type="date"
                 value={metadataDraft.effectiveDate}
@@ -407,7 +408,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
               />
             </label>
             <label className="text-xs text-zinc-600 dark:text-zinc-400">
-              Menggantikan dokumen
+              Supersedes document
               <select
                 value={metadataDraft.supersedesDocumentId}
                 onChange={(e) =>
@@ -415,7 +416,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                 }
                 className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               >
-                <option value="">(tidak ada)</option>
+                <option value="">(none)</option>
                 {otherDocuments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.title} (No. {d.documentNumber}, rev. {d.revision})
@@ -424,13 +425,13 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
               </select>
             </label>
             <label className="text-xs text-zinc-600 dark:text-zinc-400">
-              Proyek
+              Project
               <select
                 value={metadataDraft.projectId}
                 onChange={(e) => setMetadataDraft({ ...metadataDraft, projectId: e.target.value })}
                 className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               >
-                <option value="">(tidak ada)</option>
+                <option value="">(none)</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.code})
@@ -439,13 +440,13 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
               </select>
             </label>
             <label className="text-xs text-zinc-600 dark:text-zinc-400">
-              Cabang/pabrik
+              Site/plant
               <select
                 value={metadataDraft.siteId}
                 onChange={(e) => setMetadataDraft({ ...metadataDraft, siteId: e.target.value })}
                 className="mt-1 w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
               >
-                <option value="">(tidak ada)</option>
+                <option value="">(none)</option>
                 {sites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} ({s.code})
@@ -459,13 +460,13 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                 disabled={savingMetadata}
                 className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
               >
-                {savingMetadata ? "Menyimpan…" : "Simpan metadata"}
+                {savingMetadata ? "Saving…" : "Save metadata"}
               </button>
             </div>
           </form>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Proyek/cabang di sini hanya catatan metadata — belum ditegakkan sebagai pembatas akses
-            tambahan (lihat PLANNING.md §18 keputusan 12).
+            Project/site here is metadata only — it is not yet enforced as an additional access
+            restriction (see PLANNING.md §18 decision 12).
           </p>
           {metadataError ? (
             <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
@@ -478,15 +479,15 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       {canManage ? (
         <section>
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Akses dokumen
+            Document access
           </h2>
           <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Role yang bisa mencari dokumen ini di chat (default-deny — role yang tidak terdaftar di
-            sini tidak bisa mengaksesnya sama sekali).
+            Roles that can find this document in chat (default-deny — a role not listed here
+            cannot access it at all).
           </p>
           {accessGrants.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Belum ada role yang diberi akses.
+              No roles have been granted access yet.
             </p>
           ) : (
             <ul className="mb-2 divide-y divide-zinc-100 rounded border border-zinc-200 text-sm dark:divide-zinc-900 dark:border-zinc-800">
@@ -499,7 +500,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                     onClick={() => handleRevoke(grant.id)}
                     className="rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 disabled:opacity-40 dark:border-red-900 dark:text-red-400"
                   >
-                    {revokingId === grant.id ? "Mencabut…" : "Cabut"}
+                    {revokingId === grant.id ? "Revoking…" : "Revoke"}
                   </button>
                 </li>
               ))}
@@ -522,7 +523,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
               disabled={granting}
               className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
             >
-              {granting ? "Memberi akses…" : "Beri akses"}
+              {granting ? "Granting access…" : "Grant access"}
             </button>
           </form>
           {accessError ? (
@@ -540,7 +541,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Halaman</h2>
+        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Pages</h2>
         <div className="divide-y divide-zinc-100 rounded border border-zinc-200 dark:divide-zinc-900 dark:border-zinc-800">
           {pages.map((page) => (
             <div key={page.id}>
@@ -549,7 +550,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
                 onClick={() => togglePage(page.pageNumber)}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
-                <span>Halaman {page.pageNumber}</span>
+                <span>Page {page.pageNumber}</span>
                 <span className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   {page.isOcr ? (
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
@@ -564,14 +565,14 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
               {expandedPage === page.pageNumber ? (
                 <div className="border-t border-zinc-100 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-900 dark:bg-zinc-950">
                   {loadingPageNumber === page.pageNumber ? (
-                    <p className="text-zinc-500 dark:text-zinc-400">Memuat teks…</p>
+                    <p className="text-zinc-500 dark:text-zinc-400">Loading text…</p>
                   ) : pageTextError ? (
                     <p className="text-red-700 dark:text-red-400">{pageTextError}</p>
                   ) : (
                     <p className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                       {pageTextByNumber[page.pageNumber] || (
                         <span className="text-zinc-400 dark:text-zinc-600">
-                          (Tidak ada teks terekstrak untuk halaman ini.)
+                          (No text was extracted for this page.)
                         </span>
                       )}
                     </p>
@@ -589,7 +590,7 @@ export function DocumentDetailClient({ documentId }: { documentId: string }) {
 function BackLink() {
   return (
     <Link href="/documents" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-      &larr; Kembali ke daftar dokumen
+      &larr; Back to document list
     </Link>
   );
 }

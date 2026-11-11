@@ -28,7 +28,7 @@
   "dependencies": {
     "@napi-rs/canvas": "^1.0.13",
     "@vercel/blob": "^2.8.2",
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "@whiskeysockets/baileys": "6.7.24",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.2",
     "pdfjs-dist": "^6.4.299",

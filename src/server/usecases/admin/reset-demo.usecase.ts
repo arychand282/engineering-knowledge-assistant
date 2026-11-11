@@ -66,7 +66,7 @@ export async function resetDemo(): Promise<ResetDemoResult> {
   for (const doc of existingDocs) {
     // Best-effort: an already-missing blob must never block the reset itself.
     await deleteStoredFile(doc.storageKey).catch((error) => {
-      console.error(`[reset-demo] gagal hapus blob untuk dokumen ${doc.id}:`, error);
+      console.error(`[reset-demo] failed to delete blob for document ${doc.id}:`, error);
     });
   }
   if (existingDocs.length > 0) {
@@ -124,7 +124,7 @@ async function restoreDevUser(): Promise<{ id: string }> {
 
   const [adminRole] = await db.select({ id: roles.id }).from(roles).where(eq(roles.name, ROLE_ADMIN));
   if (!adminRole) {
-    throw new Error(`Role '${ROLE_ADMIN}' tidak ditemukan — jalankan seed-roles dulu.`);
+    throw new Error(`Role '${ROLE_ADMIN}' not found — run seed-roles first.`);
   }
 
   await db

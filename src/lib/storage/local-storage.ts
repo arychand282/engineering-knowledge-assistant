@@ -14,7 +14,7 @@ const storageRoot = path.resolve(/*turbopackIgnore: true*/ process.cwd(), env.ST
 function resolveStoragePath(storageKey: string): string {
   const resolved = path.resolve(/*turbopackIgnore: true*/ storageRoot, storageKey);
   if (resolved !== storageRoot && !resolved.startsWith(storageRoot + path.sep)) {
-    throw new Error(`storageKey tidak valid: ${storageKey}`);
+    throw new Error(`Invalid storageKey: ${storageKey}`);
   }
   return resolved;
 }

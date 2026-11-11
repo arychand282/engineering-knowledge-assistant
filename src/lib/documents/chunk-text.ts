@@ -33,10 +33,10 @@ export function chunkPages(pages: ChunkablePage[], options: ChunkPagesOptions = 
   const overlapWords = options.overlapWords ?? 100;
 
   if (chunkSizeWords <= 0) {
-    throw new Error("chunkSizeWords harus lebih besar dari 0.");
+    throw new Error("chunkSizeWords must be greater than 0.");
   }
   if (overlapWords < 0 || overlapWords >= chunkSizeWords) {
-    throw new Error("overlapWords harus >= 0 dan lebih kecil dari chunkSizeWords.");
+    throw new Error("overlapWords must be >= 0 and smaller than chunkSizeWords.");
   }
 
   const words: PageWord[] = [];

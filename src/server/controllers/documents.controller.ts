@@ -93,7 +93,7 @@ export async function postDocument(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return jsonError(400, "Field 'file' wajib diisi dengan satu file PDF atau DOCX.");
+    return jsonError(400, "The 'file' field must contain a single PDF or DOCX file.");
   }
 
   const metadataResult = uploadDocumentMetadataSchema.safeParse({

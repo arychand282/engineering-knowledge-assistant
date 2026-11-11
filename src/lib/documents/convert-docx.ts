@@ -10,9 +10,10 @@ const execFileAsync = promisify(execFile);
 export class LibreOfficeUnavailableError extends Error {
   constructor(cause?: unknown) {
     super(
-      `LibreOffice tidak ditemukan di path/perintah "${env.SOFFICE_BINARY}" (env SOFFICE_BINARY). ` +
-        "Upload DOCX butuh LibreOffice terinstal — lihat README 'Prasyarat' untuk instalasi. Jika " +
-        "LibreOffice sudah terinstal tapi tidak ada di PATH, set SOFFICE_BINARY ke path lengkapnya.",
+      `LibreOffice was not found at path/command "${env.SOFFICE_BINARY}" (env SOFFICE_BINARY). ` +
+        "Uploading DOCX requires LibreOffice to be installed — see the README 'Prerequisites' " +
+        "section for installation. If LibreOffice is already installed but not on PATH, set " +
+        "SOFFICE_BINARY to its full path.",
     );
     this.name = "LibreOfficeUnavailableError";
     this.cause = cause;
@@ -21,7 +22,7 @@ export class LibreOfficeUnavailableError extends Error {
 
 export class CorruptDocxError extends Error {
   constructor(cause?: unknown) {
-    super("File tidak dapat dibaca sebagai DOCX yang valid.");
+    super("The file could not be read as a valid DOCX.");
     this.name = "CorruptDocxError";
     this.cause = cause;
   }
@@ -41,8 +42,8 @@ function isBinaryNotFoundError(error: unknown): boolean {
  * the existing PDF extraction pipeline (extract-pdf.ts) unchanged — including its real,
  * renderer-derived page numbers. DOCX itself stores no page boundaries (pagination is a
  * rendering-time concern there, not part of the format), so this is the only way to get
- * genuine page numbers rather than an invented approximation (PLANNING.md §7 tahap 2,
- * "Stack yang direkomendasikan" DOCX row).
+ * genuine page numbers rather than an invented approximation (PLANNING.md §7 stage 2,
+ * "Recommended stack" DOCX row).
  *
  * Every temp file lives under its own per-call temp directory, removed afterward
  * whether conversion succeeded or not.

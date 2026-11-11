@@ -15,16 +15,16 @@ const phoneNumberSchema = z
   .trim()
   .transform(normalizePhoneNumber)
   .pipe(
-    z.string().regex(/^[0-9]{8,15}$/, "Nomor telepon harus 8–15 digit (format E.164 tanpa '+')"),
+    z.string().regex(/^[0-9]{8,15}$/, "Phone number must be 8-15 digits (E.164 format without '+')"),
   );
 
 export const linkWhatsappNumberSchema = z.object({
   phoneNumber: phoneNumberSchema,
-  userId: z.string().uuid("id pengguna tidak valid"),
+  userId: z.string().uuid("Invalid user id"),
 });
 
 export type LinkWhatsappNumberInput = z.infer<typeof linkWhatsappNumberSchema>;
 
 export const whatsappLinkIdParamSchema = z.object({
-  linkId: z.string().uuid("id tautan tidak valid"),
+  linkId: z.string().uuid("Invalid link id"),
 });

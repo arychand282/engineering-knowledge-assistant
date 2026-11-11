@@ -34,7 +34,7 @@ export function AdminPageClient() {
       const data = await parseJsonOrThrow<{ items: UserRow[] }>(res);
       setUsers(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat daftar pengguna.");
+      setError(err instanceof Error ? err.message : "Failed to load the user list.");
     }
   }, []);
 
@@ -44,7 +44,7 @@ export function AdminPageClient() {
       const data = await parseJsonOrThrow<{ items: AuditEventRow[] }>(res);
       setAuditEvents(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat audit log.");
+      setError(err instanceof Error ? err.message : "Failed to load the audit log.");
     }
   }, []);
 
@@ -67,11 +67,11 @@ export function AdminPageClient() {
         body: JSON.stringify({ roleNames: nextRoles }),
       });
       if (!res.ok) {
-        throw new Error((await res.json().catch(() => null))?.error ?? "Gagal mengubah role.");
+        throw new Error((await res.json().catch(() => null))?.error ?? "Failed to update role.");
       }
       await loadUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengubah role.");
+      setError(err instanceof Error ? err.message : "Failed to update role.");
     }
   }
 
@@ -84,12 +84,12 @@ export function AdminPageClient() {
       });
       if (!res.ok) {
         throw new Error(
-          (await res.json().catch(() => null))?.error ?? "Gagal mengubah status akun.",
+          (await res.json().catch(() => null))?.error ?? "Failed to update account status.",
         );
       }
       await loadUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengubah status akun.");
+      setError(err instanceof Error ? err.message : "Failed to update account status.");
     }
   }
 
@@ -102,12 +102,12 @@ export function AdminPageClient() {
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Pengguna</h2>
+        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Users</h2>
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
               <th className="py-2 pr-3 font-medium">Email</th>
-              <th className="py-2 pr-3 font-medium">Nama</th>
+              <th className="py-2 pr-3 font-medium">Name</th>
               <th className="py-2 pr-3 font-medium">Role</th>
               <th className="py-2 font-medium">Status</th>
             </tr>
@@ -141,7 +141,7 @@ export function AdminPageClient() {
                         : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
                     }`}
                   >
-                    {user.isActive ? "Aktif" : "Nonaktif"}
+                    {user.isActive ? "Active" : "Inactive"}
                   </button>
                 </td>
               </tr>
@@ -152,22 +152,22 @@ export function AdminPageClient() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Audit log terbaru
+          Recent audit log
         </h2>
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              <th className="py-2 pr-3 font-medium">Waktu</th>
-              <th className="py-2 pr-3 font-medium">Aksi</th>
+              <th className="py-2 pr-3 font-medium">Time</th>
+              <th className="py-2 pr-3 font-medium">Action</th>
               <th className="py-2 pr-3 font-medium">Resource</th>
-              <th className="py-2 font-medium">Hasil</th>
+              <th className="py-2 font-medium">Result</th>
             </tr>
           </thead>
           <tbody>
             {auditEvents.map((event) => (
               <tr key={event.id} className="border-b border-zinc-100 dark:border-zinc-900">
                 <td className="py-2 pr-3 text-zinc-500 dark:text-zinc-400">
-                  {new Date(event.createdAt).toLocaleString("id-ID")}
+                  {new Date(event.createdAt).toLocaleString("en-US")}
                 </td>
                 <td className="py-2 pr-3">{event.action}</td>
                 <td className="py-2 pr-3">

@@ -6,7 +6,7 @@ export function jsonError(status: number, message: string) {
 }
 
 export function zodBadRequest(error: z.ZodError) {
-  return NextResponse.json({ error: "Validasi gagal.", issues: error.issues }, { status: 400 });
+  return NextResponse.json({ error: "Validation failed.", issues: error.issues }, { status: 400 });
 }
 
 export function rateLimited(message: string, retryAfterMs: number) {

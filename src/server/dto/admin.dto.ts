@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ALL_ROLES } from "@/server/auth/roles";
 
 export const userIdParamSchema = z.object({
-  id: z.string().uuid("id pengguna tidak valid"),
+  id: z.string().uuid("Invalid user id"),
 });
 
 export const updateUserSchema = z
@@ -11,7 +11,7 @@ export const updateUserSchema = z
     roleNames: z.array(z.enum(ALL_ROLES)).optional(),
   })
   .refine((value) => value.isActive !== undefined || value.roleNames !== undefined, {
-    message: "Minimal salah satu dari isActive atau roleNames wajib diisi.",
+    message: "At least one of isActive or roleNames must be provided.",
   });
 
 export const auditEventsQuerySchema = z.object({

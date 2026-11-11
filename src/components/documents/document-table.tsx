@@ -37,7 +37,7 @@ function ApprovalCell({ doc }: { doc: DocumentRowView }) {
     <span className="text-zinc-500 dark:text-zinc-400">
       {doc.approvedByEmail}
       <br />
-      {new Date(doc.approvedAt).toLocaleString("id-ID")}
+      {new Date(doc.approvedAt).toLocaleString("en-US")}
     </span>
   );
 }
@@ -59,7 +59,7 @@ export function DocumentTable({
   if (documents.length === 0) {
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Belum ada dokumen. Unggah PDF menggunakan form di atas.
+        No documents yet. Upload a PDF using the form above.
       </p>
     );
   }
@@ -105,7 +105,7 @@ export function DocumentTable({
       cancelEdit();
       onUpdated?.();
     } catch (err) {
-      setRowError(err instanceof Error ? err.message : "Gagal menyimpan perubahan.");
+      setRowError(err instanceof Error ? err.message : "Failed to save changes.");
     } finally {
       setSaving(false);
     }
@@ -115,14 +115,14 @@ export function DocumentTable({
     <table className="w-full text-left text-sm">
       <thead>
         <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-          <th className="py-2 pr-3 font-medium">Judul</th>
-          <th className="py-2 pr-3 font-medium">No. Dokumen</th>
-          <th className="py-2 pr-3 font-medium">Tipe</th>
-          <th className="py-2 pr-3 font-medium">Revisi</th>
+          <th className="py-2 pr-3 font-medium">Title</th>
+          <th className="py-2 pr-3 font-medium">Doc. No.</th>
+          <th className="py-2 pr-3 font-medium">Type</th>
+          <th className="py-2 pr-3 font-medium">Revision</th>
           <th className="py-2 pr-3 font-medium">Status</th>
-          <th className="py-2 pr-3 font-medium">Disetujui</th>
-          <th className="py-2 pr-3 font-medium">Diunggah</th>
-          {canEdit ? <th className="py-2 font-medium">Aksi</th> : null}
+          <th className="py-2 pr-3 font-medium">Approved</th>
+          <th className="py-2 pr-3 font-medium">Uploaded</th>
+          {canEdit ? <th className="py-2 font-medium">Actions</th> : null}
         </tr>
       </thead>
       <tbody>
@@ -177,7 +177,7 @@ export function DocumentTable({
                     <ApprovalCell doc={doc} />
                   </td>
                   <td className="py-2 pr-3 text-zinc-500 dark:text-zinc-400">
-                    {new Date(doc.createdAt).toLocaleString("id-ID")}
+                    {new Date(doc.createdAt).toLocaleString("en-US")}
                   </td>
                   <td className="py-2">
                     <div className="flex flex-col gap-1">
@@ -188,7 +188,7 @@ export function DocumentTable({
                           onClick={() => saveEdit(doc)}
                           className="rounded bg-zinc-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
                         >
-                          {saving ? "Menyimpan…" : "Simpan"}
+                          {saving ? "Saving…" : "Save"}
                         </button>
                         <button
                           type="button"
@@ -196,7 +196,7 @@ export function DocumentTable({
                           onClick={cancelEdit}
                           className="rounded border border-zinc-300 px-2 py-1 text-xs font-medium disabled:opacity-40 dark:border-zinc-700"
                         >
-                          Batal
+                          Cancel
                         </button>
                       </div>
                       {rowError ? (
@@ -222,7 +222,7 @@ export function DocumentTable({
                     <ApprovalCell doc={doc} />
                   </td>
                   <td className="py-2 pr-3 text-zinc-500 dark:text-zinc-400">
-                    {new Date(doc.createdAt).toLocaleString("id-ID")}
+                    {new Date(doc.createdAt).toLocaleString("en-US")}
                   </td>
                   {canEdit ? (
                     <td className="py-2">

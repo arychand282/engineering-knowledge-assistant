@@ -16,7 +16,7 @@ let warnedExternalEmbeddingProvider = false;
  * Single entry point every caller uses to embed text — which provider actually runs is
  * decided entirely by EMBEDDING_PROVIDER (default "local"/Ollama). Same opt-in-exception
  * pattern as CHAT_PROVIDER (chat-completion.ts), documented separately in PLANNING.md
- * "Mode Embedding Eksternal" because, unlike CHAT_PROVIDER, this one does send document
+ * "External Embedding Mode" because, unlike CHAT_PROVIDER, this one does send document
  * chunk/query TEXT to a cloud API for the embedding step itself.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
@@ -27,10 +27,10 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (env.EMBEDDING_PROVIDER !== "local" && !warnedExternalEmbeddingProvider) {
     warnedExternalEmbeddingProvider = true;
     console.warn(
-      `[embedding] PERINGATAN: EMBEDDING_PROVIDER="${env.EMBEDDING_PROVIDER}" aktif — teks chunk ` +
-        "dokumen dan pertanyaan pengguna akan dikirim ke API pihak ketiga ini untuk di-embed. Mode " +
-        "demo/dev saja — jangan gunakan dengan dokumen perusahaan sungguhan (lihat PLANNING.md " +
-        "'Mode Embedding Eksternal').",
+      `[embedding] WARNING: EMBEDDING_PROVIDER="${env.EMBEDDING_PROVIDER}" is active — document ` +
+        "chunk text and user questions will be sent to this third-party API to be embedded. Demo/dev " +
+        "mode only — do not use with real company documents (see PLANNING.md " +
+        "'External Embedding Mode').",
     );
   }
 

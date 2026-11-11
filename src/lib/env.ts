@@ -317,7 +317,7 @@ function loadEnv(): Env {
     data.DATABASE_URL ?? (data.NODE_ENV !== "production" ? DEV_DEFAULT_DATABASE_URL : undefined);
 
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL wajib diisi untuk NODE_ENV=production.");
+    throw new Error("DATABASE_URL must be set for NODE_ENV=production.");
   }
 
   const requiredKeyByProvider: Record<string, { key: string | undefined; envVar: string }> = {
@@ -328,22 +328,22 @@ function loadEnv(): Env {
   const requiredChatKey = requiredKeyByProvider[data.CHAT_PROVIDER];
   if (requiredChatKey && !requiredChatKey.key) {
     throw new Error(
-      `${requiredChatKey.envVar} wajib diisi jika CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
-        "CHAT_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
+      `${requiredChatKey.envVar} must be set when CHAT_PROVIDER=${data.CHAT_PROVIDER}. ` +
+        "CHAT_PROVIDER is for demo/dev only — do not use it with real company documents (see PLANNING.md).",
     );
   }
   const requiredEmbeddingKey = requiredKeyByProvider[data.EMBEDDING_PROVIDER];
   if (requiredEmbeddingKey && !requiredEmbeddingKey.key) {
     throw new Error(
-      `${requiredEmbeddingKey.envVar} wajib diisi jika EMBEDDING_PROVIDER=${data.EMBEDDING_PROVIDER}. ` +
-        "EMBEDDING_PROVIDER hanya untuk demo/dev — jangan dipakai dengan dokumen perusahaan sungguhan (lihat PLANNING.md).",
+      `${requiredEmbeddingKey.envVar} must be set when EMBEDDING_PROVIDER=${data.EMBEDDING_PROVIDER}. ` +
+        "EMBEDDING_PROVIDER is for demo/dev only — do not use it with real company documents (see PLANNING.md).",
     );
   }
 
   if (data.STORAGE_PROVIDER === "vercel-blob" && !data.BLOB_READ_WRITE_TOKEN) {
     throw new Error(
-      "BLOB_READ_WRITE_TOKEN wajib diisi jika STORAGE_PROVIDER=vercel-blob " +
-        "(otomatis terisi oleh Vercel saat Blob store terhubung ke project).",
+      "BLOB_READ_WRITE_TOKEN must be set when STORAGE_PROVIDER=vercel-blob " +
+        "(automatically populated by Vercel when a Blob store is connected to the project).",
     );
   }
 
@@ -356,7 +356,7 @@ function loadEnv(): Env {
     ].filter(([, value]) => !value);
     if (missing.length > 0) {
       throw new Error(
-        `${missing.map(([name]) => name).join(", ")} wajib diisi jika WHATSAPP_PROVIDER=meta.`,
+        `${missing.map(([name]) => name).join(", ")} must be set when WHATSAPP_PROVIDER=meta.`,
       );
     }
   }

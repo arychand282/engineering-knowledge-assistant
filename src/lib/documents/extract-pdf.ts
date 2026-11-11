@@ -4,7 +4,7 @@ import { VerbosityLevel, cMapUrl, getDocument, standardFontDataUrl } from "./_pd
 
 export class CorruptPdfError extends Error {
   constructor(cause?: unknown) {
-    super("File tidak dapat dibaca sebagai PDF yang valid.");
+    super("The file could not be read as a valid PDF.");
     this.name = "CorruptPdfError";
     this.cause = cause;
   }
@@ -15,7 +15,7 @@ export class TooManyPagesError extends Error {
     public readonly actualPages: number,
     public readonly maxPages: number,
   ) {
-    super(`Dokumen memiliki ${actualPages} halaman, melebihi batas ${maxPages} halaman.`);
+    super(`The document has ${actualPages} pages, exceeding the limit of ${maxPages} pages.`);
     this.name = "TooManyPagesError";
   }
 }

@@ -8,7 +8,7 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
 export async function parseJsonOrThrow<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!response.ok) {
-    throw new Error(data?.error ?? `Permintaan gagal (HTTP ${response.status}).`);
+    throw new Error(data?.error ?? `Request failed (HTTP ${response.status}).`);
   }
   return data as T;
 }

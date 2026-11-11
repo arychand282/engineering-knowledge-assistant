@@ -12,10 +12,10 @@ const optionalUuid = z.preprocess(emptyToUndefined, z.string().uuid().optional()
  * (PLANNING.md #6, #19 rule 5a).
  */
 export const uploadDocumentMetadataSchema = z.object({
-  title: z.string().trim().min(1, "title wajib diisi"),
-  documentNumber: z.string().trim().min(1, "documentNumber wajib diisi"),
-  documentType: z.string().trim().min(1, "documentType wajib diisi"),
-  revision: z.string().trim().min(1, "revision wajib diisi"),
+  title: z.string().trim().min(1, "title is required"),
+  documentNumber: z.string().trim().min(1, "documentNumber is required"),
+  documentType: z.string().trim().min(1, "documentType is required"),
+  revision: z.string().trim().min(1, "revision is required"),
   projectId: optionalUuid,
   siteId: optionalUuid,
 });
@@ -33,12 +33,12 @@ export const listDocumentsQuerySchema = z.object({
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
 
 export const documentIdParamSchema = z.object({
-  id: z.string().uuid("id dokumen tidak valid"),
+  id: z.string().uuid("Invalid document id"),
 });
 
 export const documentPageParamSchema = z.object({
-  id: z.string().uuid("id dokumen tidak valid"),
-  page: z.coerce.number().int().positive("page harus berupa angka bulat positif"),
+  id: z.string().uuid("Invalid document id"),
+  page: z.coerce.number().int().positive("page must be a positive integer"),
 });
 
 /**
@@ -48,22 +48,22 @@ export const documentPageParamSchema = z.object({
  */
 export const updateDocumentSchema = z
   .object({
-    title: z.string().trim().min(1, "title tidak boleh kosong").optional(),
-    documentNumber: z.string().trim().min(1, "documentNumber tidak boleh kosong").optional(),
-    documentType: z.string().trim().min(1, "documentType tidak boleh kosong").optional(),
-    revision: z.string().trim().min(1, "revision tidak boleh kosong").optional(),
+    title: z.string().trim().min(1, "title cannot be empty").optional(),
+    documentNumber: z.string().trim().min(1, "documentNumber cannot be empty").optional(),
+    documentType: z.string().trim().min(1, "documentType cannot be empty").optional(),
+    revision: z.string().trim().min(1, "revision cannot be empty").optional(),
     status: z.enum(documentStatusEnum.enumValues).optional(),
     effectiveDate: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveDate harus berformat YYYY-MM-DD")
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveDate must be in YYYY-MM-DD format")
       .nullable()
       .optional(),
-    supersedesDocumentId: z.string().uuid("supersedesDocumentId tidak valid").nullable().optional(),
-    projectId: z.string().uuid("projectId tidak valid").nullable().optional(),
-    siteId: z.string().uuid("siteId tidak valid").nullable().optional(),
+    supersedesDocumentId: z.string().uuid("Invalid supersedesDocumentId").nullable().optional(),
+    projectId: z.string().uuid("Invalid projectId").nullable().optional(),
+    siteId: z.string().uuid("Invalid siteId").nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: "Minimal satu field harus diisi untuk diubah.",
+    message: "At least one field must be provided to update.",
   });
 
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
@@ -75,6 +75,6 @@ export const grantDocumentAccessSchema = z.object({
 export type GrantDocumentAccessInput = z.infer<typeof grantDocumentAccessSchema>;
 
 export const documentAccessIdParamSchema = z.object({
-  id: z.string().uuid("id dokumen tidak valid"),
-  accessId: z.string().uuid("id akses tidak valid"),
+  id: z.string().uuid("Invalid document id"),
+  accessId: z.string().uuid("Invalid access id"),
 });

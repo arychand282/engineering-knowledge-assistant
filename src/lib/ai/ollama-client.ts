@@ -7,7 +7,7 @@ import { EmbeddingDimensionMismatchError } from "./providers/errors";
  * URL is dev/self-hosted only (PLANNING.md: no external AI/embedding/OCR services).
  */
 export class OllamaUnavailableError extends Error {
-  constructor(cause?: unknown, message = "Model lokal (Ollama) tidak dapat dihubungi.") {
+  constructor(cause?: unknown, message = "Could not reach the local model (Ollama).") {
     super(message);
     this.name = "OllamaUnavailableError";
     this.cause = cause;
@@ -123,7 +123,7 @@ export async function generateChatCompletion(
     clearTimeout(timeout);
     throw new OllamaUnavailableError(
       new Error(`Ollama /api/chat returned HTTP ${response.status}`),
-      "Model chat lokal (Ollama) tidak dapat dihubungi.",
+      "Could not reach the local chat model (Ollama).",
     );
   }
 
@@ -132,7 +132,7 @@ export async function generateChatCompletion(
     if (!content) {
       throw new OllamaUnavailableError(
         new Error("Ollama /api/chat returned no message content"),
-        "Model chat lokal (Ollama) tidak dapat dihubungi.",
+        "Could not reach the local chat model (Ollama).",
       );
     }
     return content;
@@ -140,7 +140,7 @@ export async function generateChatCompletion(
     if (error instanceof OllamaUnavailableError) {
       throw error;
     }
-    throw new OllamaUnavailableError(error, "Model chat lokal (Ollama) tidak dapat dihubungi.");
+    throw new OllamaUnavailableError(error, "Could not reach the local chat model (Ollama).");
   } finally {
     clearTimeout(timeout);
   }

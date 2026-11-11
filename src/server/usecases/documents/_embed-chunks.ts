@@ -19,7 +19,7 @@ export interface EmbedChunksResult {
  * is unavailable, chunks are left with a null `embedding` (still full-text searchable)
  * rather than failing the whole upload — ingestion must not depend on the AI provider
  * being up. Callers must surface `embeddedCount`/`skipped` to the caller rather than
- * silently reporting success (PLANNING.md: "jangan berpura-pura berhasil").
+ * silently reporting success (PLANNING.md: "never pretend to have succeeded").
  */
 export async function embedChunks(chunks: DocumentChunkRow[]): Promise<EmbedChunksResult> {
   if (chunks.length === 0) {
@@ -34,7 +34,7 @@ export async function embedChunks(chunks: DocumentChunkRow[]): Promise<EmbedChun
       error instanceof EmbeddingProviderUnavailableError ||
       error instanceof EmbeddingDimensionMismatchError
     ) {
-      console.error("[embedChunks] embedding gagal, chunk disimpan tanpa embedding:", error);
+      console.error("[embedChunks] embedding failed, chunk stored without embedding:", error);
       return { embeddedCount: 0, skipped: true };
     }
     throw error;

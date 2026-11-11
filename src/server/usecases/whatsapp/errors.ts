@@ -1,27 +1,27 @@
 export class UserNotFoundError extends Error {
   constructor(public readonly userId: string) {
-    super(`User ${userId} tidak ditemukan.`);
+    super(`User ${userId} not found.`);
     this.name = "UserNotFoundError";
   }
 }
 
 export class PhoneAlreadyLinkedError extends Error {
   constructor(phoneNumber: string) {
-    super(`Nomor ${phoneNumber} sudah ditautkan ke pengguna lain.`);
+    super(`Number ${phoneNumber} is already linked to another user.`);
     this.name = "PhoneAlreadyLinkedError";
   }
 }
 
 export class UserAlreadyLinkedError extends Error {
   constructor(userId: string) {
-    super(`Pengguna ${userId} sudah punya nomor WhatsApp tertaut.`);
+    super(`User ${userId} already has a linked WhatsApp number.`);
     this.name = "UserAlreadyLinkedError";
   }
 }
 
 export class WhatsappLinkNotFoundError extends Error {
   constructor(linkId: string) {
-    super(`Tautan WhatsApp ${linkId} tidak ditemukan.`);
+    super(`WhatsApp link ${linkId} not found.`);
     this.name = "WhatsappLinkNotFoundError";
   }
 }

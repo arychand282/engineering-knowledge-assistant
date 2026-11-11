@@ -5,10 +5,10 @@ import { roles } from "./roles";
 import { sites } from "./sites";
 
 /**
- * Satu baris = satu aturan akses yang mengizinkan sebuah role (opsional dibatasi per
- * proyek/cabang) membaca sebuah dokumen. Tidak adanya baris untuk suatu dokumen+role
- * berarti role tersebut tidak diizinkan, kecuali kebijakan default lain ditetapkan di
- * usecase retrieval.
+ * One row = one access rule granting a role (optionally scoped to a project/site)
+ * permission to read a document. The absence of a row for a given document+role
+ * means that role is not permitted, unless a different default policy is defined in
+ * the retrieval usecase.
  */
 export const documentAccess = pgTable(
   "document_access",

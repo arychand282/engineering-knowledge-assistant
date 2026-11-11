@@ -1,33 +1,33 @@
 export class InvalidCredentialsError extends Error {
   constructor() {
-    super("Email atau password salah.");
+    super("Incorrect email or password.");
     this.name = "InvalidCredentialsError";
   }
 }
 
 export class AccountDisabledError extends Error {
   constructor() {
-    super("Akun ini telah dinonaktifkan.");
+    super("This account has been disabled.");
     this.name = "AccountDisabledError";
   }
 }
 
 export class RateLimitedError extends Error {
   constructor(public readonly retryAfterMs: number) {
-    super("Terlalu banyak percobaan login. Coba lagi beberapa saat lagi.");
+    super("Too many login attempts. Please try again in a moment.");
     this.name = "RateLimitedError";
   }
 }
 
 export class UnauthenticatedError extends Error {
   constructor() {
-    super("Sesi tidak valid atau sudah berakhir. Silakan login kembali.");
+    super("Your session is invalid or has expired. Please log in again.");
     this.name = "UnauthenticatedError";
   }
 }
 
 export class ForbiddenError extends Error {
-  constructor(message = "Anda tidak memiliki izin untuk melakukan aksi ini.") {
+  constructor(message = "You do not have permission to perform this action.") {
     super(message);
     this.name = "ForbiddenError";
   }

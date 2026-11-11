@@ -17,9 +17,9 @@ export interface IncomingWhatsappMessage {
 }
 
 const NOT_REGISTERED_MESSAGE =
-  "Nomor ini belum terdaftar untuk menggunakan asisten ini. Hubungi admin untuk menautkan nomor Anda ke akun yang sesuai.";
+  "This number is not registered to use this assistant. Contact an admin to link your number to the right account.";
 
-const RATE_LIMITED_MESSAGE = "Terlalu banyak pertanyaan dalam waktu singkat. Coba lagi nanti.";
+const RATE_LIMITED_MESSAGE = "Too many questions in a short time. Please try again later.";
 
 /**
  * Shared core for every WhatsApp provider (Baileys now, Meta Cloud API once
@@ -83,11 +83,11 @@ export async function handleIncomingWhatsappMessage(
 function formatAnswerForWhatsapp(result: AskQuestionResult): string {
   const lines = [result.message.content];
   if (result.sources.length > 0) {
-    lines.push("", "_Sumber:_");
+    lines.push("", "_Sources:_");
     for (const source of result.sources) {
-      const ocrNote = source.isOcr ? " [hasil OCR]" : "";
+      const ocrNote = source.isOcr ? " [OCR result]" : "";
       lines.push(
-        `• ${source.documentTitle} (No. ${source.documentNumber}, rev. ${source.revision}, hal. ${source.pageNumber})${ocrNote}`,
+        `• ${source.documentTitle} (No. ${source.documentNumber}, rev. ${source.revision}, p. ${source.pageNumber})${ocrNote}`,
       );
     }
   }

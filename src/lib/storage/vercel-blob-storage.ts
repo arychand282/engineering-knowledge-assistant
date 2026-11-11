@@ -16,7 +16,7 @@ export async function saveFile(storageKey: string, data: Buffer): Promise<void> 
 export async function readStoredFile(storageKey: string): Promise<Buffer> {
   const result = await get(storageKey, { access: "private" });
   if (!result || result.statusCode !== 200) {
-    throw new Error(`Blob tidak ditemukan untuk storageKey: ${storageKey}`);
+    throw new Error(`Blob not found for storageKey: ${storageKey}`);
   }
   return Buffer.from(await new Response(result.stream).arrayBuffer());
 }

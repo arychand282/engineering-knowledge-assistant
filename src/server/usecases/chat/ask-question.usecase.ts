@@ -57,7 +57,7 @@ export interface AskQuestionResult {
 }
 
 const NO_EVIDENCE_ANSWER =
-  "Informasi untuk pertanyaan ini belum dapat diverifikasi dari dokumen yang tersedia dan dapat Anda akses.";
+  "The information for this question could not be verified from the documents available to and accessible by you.";
 
 export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionResult> {
   const conversation = input.conversationId
@@ -68,7 +68,7 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
 
   // Earlier turns of THIS conversation only, oldest-first, capped at CHAT_HISTORY_LIMIT —
   // without this the model sees each question in isolation and can't follow up on its
-  // own prior answer (e.g. "dan halaman berapa?" referring to the previous question).
+  // own prior answer (e.g. "and which page?" referring to the previous question).
   const history = await buildHistoryMessages(conversation.id);
 
   const retrieval = await searchDocuments({
@@ -120,10 +120,10 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
     rawContent = await generateChatCompletion(chatMessages);
   } catch (error) {
     if (error instanceof ChatProviderUnavailableError) {
-      console.error("[askQuestion] model chat tidak dapat dihubungi:", error);
+      console.error("[askQuestion] could not reach the chat model:", error);
       return finalizeTurn(
         conversation,
-        "Model AI sedang tidak dapat dihubungi. Silakan coba lagi beberapa saat lagi.",
+        "The AI model is currently unreachable. Please try again in a moment.",
         "error",
         [],
       );
@@ -134,13 +134,13 @@ export async function askQuestion(input: AskQuestionInput): Promise<AskQuestionR
   const parsed = llmAnswerSchema.safeParse(safeJsonParse(rawContent));
   if (!parsed.success) {
     console.error(
-      "[askQuestion] respons model tidak sesuai schema:",
+      "[askQuestion] model response did not match the schema:",
       parsed.error.message,
       rawContent,
     );
     return finalizeTurn(
       conversation,
-      "Terjadi kesalahan saat menyusun jawaban. Silakan coba lagi.",
+      "An error occurred while composing the answer. Please try again.",
       "error",
       [],
     );
@@ -231,11 +231,11 @@ function buildConflictAnswer(documents: DocumentRow[], pairs: Array<[string, str
   const involvedIds = new Set(pairs.flat());
   const involved = documents.filter((doc) => involvedIds.has(doc.id));
   const describe = (doc: DocumentRow) =>
-    `"${doc.title}" (No. ${doc.documentNumber}, revisi ${doc.revision}, status ${doc.status})`;
+    `"${doc.title}" (No. ${doc.documentNumber}, revision ${doc.revision}, status ${doc.status})`;
 
   return (
-    `Ditemukan dokumen dengan hubungan revisi yang belum terselesaikan: ${involved.map(describe).join(" dan ")}. ` +
-    "Jawaban tidak dapat diberikan secara otomatis — diperlukan verifikasi dari document controller/engineer berwenang untuk menentukan dokumen mana yang berlaku."
+    `Found documents with an unresolved revision relationship: ${involved.map(describe).join(" and ")}. ` +
+    "An answer cannot be provided automatically — verification from an authorized document controller/engineer is needed to determine which document applies."
   );
 }
 

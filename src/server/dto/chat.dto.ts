@@ -5,12 +5,12 @@ export const postChatMessageSchema = z.object({
   message: z
     .string()
     .trim()
-    .min(1, "message wajib diisi")
-    .max(2000, "message maksimal 2000 karakter"),
+    .min(1, "message is required")
+    .max(2000, "message must be at most 2000 characters"),
 });
 
 export type PostChatMessageInput = z.infer<typeof postChatMessageSchema>;
 
 export const conversationIdParamSchema = z.object({
-  id: z.string().uuid("id percakapan tidak valid"),
+  id: z.string().uuid("Invalid conversation id"),
 });

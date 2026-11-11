@@ -3,8 +3,8 @@ import { env } from "@/lib/env";
 import { ChatProviderUnavailableError } from "./errors";
 
 /**
- * Anthropic Messages API. OPT-IN external provider — see PLANNING.md "Mode Chat
- * Eksternal". Only used when CHAT_PROVIDER=anthropic; never called otherwise.
+ * Anthropic Messages API. OPT-IN external provider — see PLANNING.md "External Chat
+ * Mode". Only used when CHAT_PROVIDER=anthropic; never called otherwise.
  *
  * The Messages API has no `response_format: json` switch like OpenAI/Gemini. Instead we
  * use the standard "assistant prefill" trick: appending an assistant turn containing
@@ -13,7 +13,7 @@ import { ChatProviderUnavailableError } from "./errors";
  */
 export async function generateAnthropicChatCompletion(messages: ChatMessage[]): Promise<string> {
   if (!env.ANTHROPIC_API_KEY) {
-    throw new ChatProviderUnavailableError("ANTHROPIC_API_KEY tidak diisi.");
+    throw new ChatProviderUnavailableError("ANTHROPIC_API_KEY is not set.");
   }
 
   const systemMessage = messages.find((m) => m.role === "system");
@@ -42,19 +42,19 @@ export async function generateAnthropicChatCompletion(messages: ChatMessage[]): 
       }),
     });
   } catch (error) {
-    throw new ChatProviderUnavailableError("Anthropic API tidak dapat dihubungi.", error);
+    throw new ChatProviderUnavailableError("Could not reach the Anthropic API.", error);
   } finally {
     clearTimeout(timeout);
   }
 
   if (!response.ok) {
-    throw new ChatProviderUnavailableError(`Anthropic API mengembalikan HTTP ${response.status}.`);
+    throw new ChatProviderUnavailableError(`Anthropic API returned HTTP ${response.status}.`);
   }
 
   const data = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
   const text = data.content?.find((block) => block.type === "text")?.text;
   if (text === undefined) {
-    throw new ChatProviderUnavailableError("Anthropic API tidak mengembalikan konten jawaban.");
+    throw new ChatProviderUnavailableError("Anthropic API did not return any answer content.");
   }
 
   return `{${text}`;

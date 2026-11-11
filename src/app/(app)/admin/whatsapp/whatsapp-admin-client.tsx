@@ -26,10 +26,10 @@ interface UserOption {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  disconnected: "Terputus",
-  connecting: "Menyambungkan…",
-  qr_pending: "Menunggu scan QR",
-  connected: "Tersambung",
+  disconnected: "Disconnected",
+  connecting: "Connecting…",
+  qr_pending: "Waiting for QR scan",
+  connected: "Connected",
 };
 
 export function WhatsappAdminClient() {
@@ -50,7 +50,7 @@ export function WhatsappAdminClient() {
       const data = await parseJsonOrThrow<StatusResponse>(res);
       setStatus(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat status WhatsApp.");
+      setError(err instanceof Error ? err.message : "Failed to load WhatsApp status.");
     }
   }, []);
 
@@ -60,7 +60,7 @@ export function WhatsappAdminClient() {
       const data = await parseJsonOrThrow<{ items: WhatsappLinkRow[] }>(res);
       setLinks(data.items);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat daftar tautan.");
+      setError(err instanceof Error ? err.message : "Failed to load the list of linked numbers.");
     }
   }, []);
 
@@ -112,7 +112,7 @@ export function WhatsappAdminClient() {
       const data = await parseJsonOrThrow<StatusResponse>(res);
       setStatus(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memulai koneksi WhatsApp.");
+      setError(err instanceof Error ? err.message : "Failed to start the WhatsApp connection.");
     } finally {
       setConnecting(false);
     }
@@ -129,13 +129,13 @@ export function WhatsappAdminClient() {
         body: JSON.stringify({ phoneNumber, userId }),
       });
       if (!res.ok) {
-        throw new Error((await res.json().catch(() => null))?.error ?? "Gagal menautkan nomor.");
+        throw new Error((await res.json().catch(() => null))?.error ?? "Failed to link the number.");
       }
       setPhoneNumber("");
       setUserId("");
       await loadLinks();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menautkan nomor.");
+      setError(err instanceof Error ? err.message : "Failed to link the number.");
     } finally {
       setLinking(false);
     }
@@ -147,11 +147,11 @@ export function WhatsappAdminClient() {
     try {
       const res = await apiFetch(`/api/v1/admin/whatsapp/links/${linkId}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) {
-        throw new Error((await res.json().catch(() => null))?.error ?? "Gagal melepas tautan.");
+        throw new Error((await res.json().catch(() => null))?.error ?? "Failed to unlink the number.");
       }
       await loadLinks();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal melepas tautan.");
+      setError(err instanceof Error ? err.message : "Failed to unlink the number.");
     } finally {
       setUnlinkingId(null);
     }
@@ -169,21 +169,21 @@ export function WhatsappAdminClient() {
       ) : null}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Koneksi</h2>
+        <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">Connection</h2>
         {status?.provider === "none" ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Integrasi WhatsApp belum diaktifkan (WHATSAPP_PROVIDER=none).
+            WhatsApp integration is not enabled (WHATSAPP_PROVIDER=none).
           </p>
         ) : status?.provider === "meta" ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Menggunakan Meta Cloud API — tidak perlu scan QR, koneksi dikelola lewat webhook.
+            Using the Meta Cloud API — no QR scan needed, the connection is managed via webhook.
           </p>
         ) : (
           <div className="space-y-3">
             <p className="text-sm">
               Status:{" "}
               <span className="font-medium">
-                {status ? STATUS_LABELS[status.status ?? "disconnected"] : "Memuat…"}
+                {status ? STATUS_LABELS[status.status ?? "disconnected"] : "Loading…"}
               </span>
               {status?.phoneNumber ? ` (${status.phoneNumber})` : ""}
             </p>
@@ -193,13 +193,13 @@ export function WhatsappAdminClient() {
             {status?.status === "qr_pending" && status.qrDataUrl ? (
               <div>
                 <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  Scan dengan WhatsApp di ponsel yang akan dijadikan nomor bot (Perangkat Tertaut →
-                  Tautkan perangkat).
+                  Scan this with WhatsApp on the phone that will act as the bot number (Linked
+                  Devices → Link a device).
                 </p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={status.qrDataUrl}
-                  alt="QR code WhatsApp"
+                  alt="WhatsApp QR code"
                   className="h-56 w-56 rounded border border-zinc-200 dark:border-zinc-800"
                 />
               </div>
@@ -211,7 +211,7 @@ export function WhatsappAdminClient() {
                 onClick={handleConnect}
                 className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
               >
-                {connecting ? "Menyambungkan…" : "Sambungkan"}
+                {connecting ? "Connecting…" : "Connect"}
               </button>
             ) : null}
           </div>
@@ -220,15 +220,16 @@ export function WhatsappAdminClient() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-          Nomor tertaut
+          Linked numbers
         </h2>
         <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-          Hanya nomor yang ditautkan admin ke sebuah akun bisa menggunakan asisten lewat WhatsApp —
-          nomor yang tidak terdaftar akan dibalas otomatis bahwa nomornya belum terdaftar.
+          Only numbers an admin has linked to an account can use the assistant over WhatsApp —
+          unregistered numbers automatically receive a reply saying the number isn&apos;t
+          registered.
         </p>
         {links.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Belum ada nomor yang ditautkan.
+            No numbers have been linked yet.
           </p>
         ) : (
           <ul className="mb-2 divide-y divide-zinc-100 rounded border border-zinc-200 text-sm dark:divide-zinc-900 dark:border-zinc-800">
@@ -243,7 +244,7 @@ export function WhatsappAdminClient() {
                   onClick={() => handleUnlink(link.id)}
                   className="rounded border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 disabled:opacity-40 dark:border-red-900 dark:text-red-400"
                 >
-                  {unlinkingId === link.id ? "Melepas…" : "Lepas"}
+                  {unlinkingId === link.id ? "Unlinking…" : "Unlink"}
                 </button>
               </li>
             ))}
@@ -253,7 +254,7 @@ export function WhatsappAdminClient() {
           <input
             type="text"
             required
-            placeholder="Nomor telepon (contoh: 628123456789)"
+            placeholder="Phone number (e.g. 628123456789)"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
             className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -264,7 +265,7 @@ export function WhatsappAdminClient() {
             onChange={(e) => setUserId(e.target.value)}
             className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
-            <option value="">Pilih pengguna…</option>
+            <option value="">Select a user…</option>
             {availableUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.email}
@@ -276,7 +277,7 @@ export function WhatsappAdminClient() {
             disabled={linking}
             className="rounded bg-zinc-900 px-3 py-1 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
           >
-            {linking ? "Menautkan…" : "Tautkan"}
+            {linking ? "Linking…" : "Link"}
           </button>
         </form>
       </section>
