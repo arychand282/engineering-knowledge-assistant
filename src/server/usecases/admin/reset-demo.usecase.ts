@@ -7,6 +7,7 @@ import { conversations, documents, roles, userRoles, users } from "@/lib/db/sche
 import { ROLE_ADMIN } from "@/server/auth/roles";
 import { deleteStoredFile } from "@/lib/storage";
 import { grantDocumentAccess } from "@/server/usecases/documents/grant-document-access.usecase";
+import { updateDocument } from "@/server/usecases/documents/update-document.usecase";
 import { uploadDocument } from "@/server/usecases/documents/upload-document.usecase";
 
 /**
@@ -18,7 +19,7 @@ import { uploadDocument } from "@/server/usecases/documents/upload-document.usec
  * (verified by inspection — not assumed), so those are the only two realistic ways a
  * visitor can leave the demo unusable for the next visitor. This brings the demo back
  * to a known-good state: wipes all conversations/documents, restores the dev account
- * (active + admin role, regardless of what a visitor changed), and re-uploads the two
+ * (active + admin role, regardless of what a visitor changed), and re-uploads the
  * sample PDFs through the real upload pipeline (exercises extraction/chunking/
  * embedding exactly like a real upload, not a DB-row shortcut).
  *
@@ -26,13 +27,30 @@ import { uploadDocument } from "@/server/usecases/documents/upload-document.usec
  * cascade — see document-chunks.ts schema comment), so documents can't be deleted
  * while any conversation still cites them. Conversations (which cascade to messages
  * then message_sources) must go first.
+ *
+ * One seed pair (`concrete-curing-rev-a`/`-rev-b`) is wired with `supersedesKey` so the
+ * demo can show `conflict_detected` live (see `findSupersedesConflictPairs`), not just
+ * via the eval suite — the crane SOP stays single-revision on purpose so its `answered`/
+ * `insufficient_evidence` demo questions keep behaving the same regardless of this pair.
  */
 
 const DEV_EMAIL = "dev@example.local";
 const DEV_PASSWORD = "DevPassword123!";
 
-const SEED_DOCUMENTS = [
+interface SeedDocument {
+  key: string;
+  file: string;
+  title: string;
+  documentNumber: string;
+  documentType: string;
+  revision: string;
+  /** Must name a `key` seeded earlier in this array — order matters. */
+  supersedesKey?: string;
+}
+
+const SEED_DOCUMENTS: SeedDocument[] = [
   {
+    key: "crane-sop",
     file: "sop-crane-safety.pdf",
     title: "Tower Crane Pre-Operation Inspection SOP",
     documentNumber: "SOP-CRANE-004",
@@ -40,13 +58,23 @@ const SEED_DOCUMENTS = [
     revision: "A",
   },
   {
+    key: "concrete-curing-rev-a",
     file: "guideline-concrete-curing.pdf",
     title: "Concrete Curing for Structural Columns",
     documentNumber: "ENG-GL-012",
     documentType: "guideline",
     revision: "A",
   },
-] as const;
+  {
+    key: "concrete-curing-rev-b",
+    file: "guideline-concrete-curing-rev-b.pdf",
+    title: "Concrete Curing for Structural Columns",
+    documentNumber: "ENG-GL-012",
+    documentType: "guideline",
+    revision: "B",
+    supersedesKey: "concrete-curing-rev-a",
+  },
+];
 
 export interface ResetDemoResult {
   conversationsDeleted: number;
@@ -76,6 +104,7 @@ export async function resetDemo(): Promise<ResetDemoResult> {
   const devUser = await restoreDevUser();
 
   let reseeded = 0;
+  const seededIds: Record<string, string> = {};
   for (const seed of SEED_DOCUMENTS) {
     const buffer = await readFile(path.join(process.cwd(), "scripts/demo-seed-data", seed.file));
     const { document } = await uploadDocument({
@@ -88,6 +117,25 @@ export async function resetDemo(): Promise<ResetDemoResult> {
       },
       uploadedBy: devUser.id,
     });
+    seededIds[seed.key] = document.id;
+
+    if (seed.supersedesKey) {
+      const supersededId = seededIds[seed.supersedesKey];
+      if (!supersededId) {
+        // Fails loudly instead of silently seeding a document with no conflict pair —
+        // SEED_DOCUMENTS order must list the superseded entry first.
+        throw new Error(
+          `[reset-demo] supersedesKey "${seed.supersedesKey}" (for "${seed.key}") was not ` +
+            "seeded before this entry — check SEED_DOCUMENTS order.",
+        );
+      }
+      await updateDocument({
+        documentId: document.id,
+        patch: { supersedesDocumentId: supersededId },
+        actorUserId: devUser.id,
+      });
+    }
+
     await grantDocumentAccess({
       documentId: document.id,
       roleName: ROLE_ADMIN,
