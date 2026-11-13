@@ -77,6 +77,7 @@ export async function searchDocuments(input: SearchDocumentsInput): Promise<Sear
       queryEmbedding,
       accessibleDocumentIds,
       candidateLimit,
+      env.VECTOR_SIMILARITY_MARGIN,
     );
   } catch (error) {
     if (

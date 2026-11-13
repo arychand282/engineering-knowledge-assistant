@@ -56,11 +56,24 @@ export interface ChunkSearchResult {
   score: number;
 }
 
-/** Cosine similarity search over document_chunks.embedding, scoped to allowed documents. */
+/**
+ * Cosine similarity search over document_chunks.embedding, scoped to allowed documents.
+ * `scoreMargin` drops any result scoring more than `scoreMargin` below the TOP match for
+ * this query (see VECTOR_SIMILARITY_MARGIN in env.ts for why — a small document set lets
+ * clearly unrelated chunks fill out the top-`limit` results just because there aren't
+ * enough real candidates to outrank them). This is relative, not an absolute cutoff: an
+ * absolute similarity floor was tried first and rejected because baseline cosine scores
+ * for CLEARLY unrelated content shift a lot by language/content (measured ~0.48 on one
+ * corpus, ~0.63 on another, for content with nothing to do with the query in both cases)
+ * — no single global number separates relevant from irrelevant across corpora. The GAP
+ * between the best match and an unrelated one stayed wide (~0.25-0.29) on both, which is
+ * what this filters on instead.
+ */
 export async function searchChunksByVector(
   queryEmbedding: number[],
   documentIds: string[],
   limit: number,
+  scoreMargin: number,
 ): Promise<ChunkSearchResult[]> {
   if (documentIds.length === 0) {
     return [];
@@ -78,7 +91,16 @@ export async function searchChunksByVector(
     .orderBy(asc(distance))
     .limit(limit);
 
-  return rows.map(({ distance: d, ...rest }) => ({ ...rest, score: 1 - d }));
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const topScore = 1 - rows[0].distance;
+  const minScore = topScore - scoreMargin;
+
+  return rows
+    .map(({ distance: d, ...rest }) => ({ ...rest, score: 1 - d }))
+    .filter((row) => row.score >= minScore);
 }
 
 /**

@@ -40,6 +40,8 @@ let roleBId: string;
 let docAId: string;
 let docBId: string;
 let docCId: string;
+let chunkA1Id: string;
+let chunkA2Id: string;
 const createdUserIds: string[] = [];
 const createdRoleIds: string[] = [];
 const createdDocumentIds: string[] = [];
@@ -126,35 +128,61 @@ beforeAll(async () => {
     "Panduan pemeliharaan forklift gudang logistik dilakukan setiap bulan oleh operator.";
   const contentC =
     "Prosedur pemesanan alat tulis kantor dilakukan melalui formulir permintaan barang.";
+  // Second chunk of docA itself (not a separate document) — scores close to contentA for
+  // the shared test query (~0.90 vs ~0.92, well inside VECTOR_SIMILARITY_MARGIN's default
+  // 0.2 gap), unlike docB/docC which score ~0.6 and get filtered out post-fix. The
+  // RERANK_ENABLED tests below need two genuinely-plausible candidates to reorder between;
+  // reusing an unrelated document for that (as before this fix) no longer reflects reality.
+  const contentA2 =
+    "Katup pelepas tekanan boiler wajib diuji oleh teknisi bersertifikat setiap minggu untuk menjaga keselamatan.";
 
-  const [embeddingA, embeddingB, embeddingC] = await embedTexts([contentA, contentB, contentC]);
-
-  await db.insert(documentChunks).values([
-    {
-      documentId: docAId,
-      pageStart: 1,
-      pageEnd: 1,
-      chunkIndex: 0,
-      content: contentA,
-      embedding: embeddingA,
-    },
-    {
-      documentId: docBId,
-      pageStart: 1,
-      pageEnd: 1,
-      chunkIndex: 0,
-      content: contentB,
-      embedding: embeddingB,
-    },
-    {
-      documentId: docCId,
-      pageStart: 1,
-      pageEnd: 1,
-      chunkIndex: 0,
-      content: contentC,
-      embedding: embeddingC,
-    },
+  const [embeddingA, embeddingB, embeddingC, embeddingA2] = await embedTexts([
+    contentA,
+    contentB,
+    contentC,
+    contentA2,
   ]);
+
+  const insertedChunks = await db
+    .insert(documentChunks)
+    .values([
+      {
+        documentId: docAId,
+        pageStart: 1,
+        pageEnd: 1,
+        chunkIndex: 0,
+        content: contentA,
+        embedding: embeddingA,
+      },
+      {
+        documentId: docBId,
+        pageStart: 1,
+        pageEnd: 1,
+        chunkIndex: 0,
+        content: contentB,
+        embedding: embeddingB,
+      },
+      {
+        documentId: docCId,
+        pageStart: 1,
+        pageEnd: 1,
+        chunkIndex: 0,
+        content: contentC,
+        embedding: embeddingC,
+      },
+      {
+        documentId: docAId,
+        pageStart: 1,
+        pageEnd: 1,
+        chunkIndex: 1,
+        content: contentA2,
+        embedding: embeddingA2,
+      },
+    ])
+    .returning();
+
+  chunkA1Id = insertedChunks.find((c) => c.content === contentA)!.id;
+  chunkA2Id = insertedChunks.find((c) => c.content === contentA2)!.id;
 }, 30_000);
 
 afterAll(async () => {
@@ -179,6 +207,19 @@ describe("searchDocuments", () => {
     expect(result.results[0].documentId).toBe(docAId);
     // docB belongs to a different role entirely — must never leak into userGranted's results.
     expect(result.results.some((r) => r.documentId === docBId)).toBe(false);
+  });
+
+  it("excludes an accessible but semantically unrelated chunk (VECTOR_SIMILARITY_MARGIN)", async () => {
+    const result = await searchDocuments({
+      query: "keselamatan boiler tekanan tinggi",
+      userId: userGrantedId,
+    });
+
+    // docC ("pemesanan alat tulis kantor") is accessible to this user — same role as
+    // docA — but has nothing to do with the query. On a corpus this small there aren't
+    // enough real candidates to naturally push an unrelated chunk out of the top-K by
+    // rank alone; without a minimum similarity floor it would still show up here.
+    expect(result.results.some((r) => r.documentId === docCId)).toBe(false);
   });
 
   it("never returns a document outside the user's granted role (no cross-user leakage)", async () => {
@@ -225,10 +266,12 @@ describe("searchDocuments with RERANK_ENABLED", () => {
     env.RERANK_ENABLED = true;
     env.CHAT_PROVIDER = "local";
 
-    // Without reranking, docA's chunk wins this query (asserted in the sibling test
-    // above). The mock gives the LAST-listed candidate the highest score — since docA
-    // naturally ranks first (so is listed first), this forces a real order flip: docC
-    // must win instead, proving the final order actually came from the reranker.
+    // Without reranking, chunkA1 wins this query (asserted in the sibling test above —
+    // both chunkA1/chunkA2 belong to docA and are close enough in score to both survive
+    // VECTOR_SIMILARITY_MARGIN, unlike docB/docC which are filtered out as irrelevant).
+    // The mock gives the LAST-listed candidate the highest score — since chunkA1 naturally
+    // ranks first (so is listed first), this forces a real order flip: chunkA2 must win
+    // instead, proving the final order actually came from the reranker.
     mockedGenerateChatCompletion.mockImplementationOnce(async (messages) => {
       const prompt = messages[messages.length - 1].content;
       const chunkIdMatches = [...prompt.matchAll(/\[chunk:([0-9a-f-]+)\]/g)].map((m) => m[1]);
@@ -243,7 +286,7 @@ describe("searchDocuments with RERANK_ENABLED", () => {
 
     expect(mockedGenerateChatCompletion).toHaveBeenCalledTimes(1);
     expect(result.reranked).toBe(true);
-    expect(result.results[0].documentId).toBe(docCId);
+    expect(result.results[0].chunkId).toBe(chunkA2Id);
   });
 
   it("falls back to the original (unreranked) order when the model returns malformed JSON", async () => {
@@ -257,7 +300,7 @@ describe("searchDocuments with RERANK_ENABLED", () => {
     });
 
     expect(result.reranked).toBe(false);
-    expect(result.results[0].documentId).toBe(docAId); // same winner as the non-rerank test
+    expect(result.results[0].chunkId).toBe(chunkA1Id); // same winner as the non-rerank test
   });
 
   it("skips reranking entirely when CHAT_PROVIDER is not local", async () => {

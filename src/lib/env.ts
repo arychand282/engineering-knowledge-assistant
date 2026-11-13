@@ -88,6 +88,26 @@ const baseEnvSchema = z.object({
   OLLAMA_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
   CHAT_RETRIEVAL_LIMIT: z.coerce.number().int().positive().default(6),
 
+  // Vector search (searchChunksByVector) returns the nearest CHAT_RETRIEVAL_LIMIT/
+  // RERANK_CANDIDATE_LIMIT chunks by cosine similarity with NO minimum score — on a
+  // small document set that means every chunk qualifies as a "candidate" regardless of
+  // actual relevance (there just aren't enough chunks to push weak matches out of the
+  // top-K). This surfaced as a real bug: a query about crane wind speed pulled in an
+  // unrelated concrete-curing document pair, and because findSupersedesConflictPairs
+  // treats "both revisions present in context" as certain, it reported conflict_detected
+  // on a question that had nothing to do with concrete curing.
+  //
+  // This is RELATIVE to the top match for the query, not an absolute floor — an absolute
+  // cutoff was tried first and measured to be unreliable: baseline cosine similarity for
+  // content that has nothing to do with the query shifts a lot by corpus/language
+  // (~0.48-0.49 on one test corpus, ~0.63-0.65 on another, both genuinely irrelevant), so
+  // no single global score separates relevant from irrelevant everywhere. The GAP between
+  // the best match and an unrelated one stayed wide (~0.25-0.29) in both cases — this
+  // filters on that gap instead. 0.2 is a conservative margin below the smallest gap
+  // actually measured, so a legitimately-close second match (e.g. two conflicting
+  // document revisions, which should both stay in context) isn't accidentally dropped.
+  VECTOR_SIMILARITY_MARGIN: z.coerce.number().min(0).max(1).default(0.2),
+
   // OPT-IN, default OFF — Ollama has no native cross-encoder/rerank model, so the only
   // local option is one extra chat-model call that scores/reorders candidates before
   // the final CHAT_RETRIEVAL_LIMIT is taken. This roughly doubles chat latency per
@@ -217,6 +237,7 @@ export type Env = {
   CHAT_MODEL: string;
   OLLAMA_CHAT_TIMEOUT_MS: number;
   CHAT_RETRIEVAL_LIMIT: number;
+  VECTOR_SIMILARITY_MARGIN: number;
   CHAT_HISTORY_LIMIT: number;
   RERANK_ENABLED: boolean;
   RERANK_CANDIDATE_LIMIT: number;
@@ -276,6 +297,7 @@ function loadEnv(): Env {
     CHAT_MODEL: process.env.CHAT_MODEL,
     OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
     CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
+    VECTOR_SIMILARITY_MARGIN: process.env.VECTOR_SIMILARITY_MARGIN,
     CHAT_HISTORY_LIMIT: process.env.CHAT_HISTORY_LIMIT,
     RERANK_ENABLED: process.env.RERANK_ENABLED,
     RERANK_CANDIDATE_LIMIT: process.env.RERANK_CANDIDATE_LIMIT,
