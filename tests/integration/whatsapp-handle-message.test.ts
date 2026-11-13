@@ -32,11 +32,11 @@ const PHONE = "6281234567890";
 
 function fakeDocument(overrides: Partial<typeof documents.$inferInsert> & { uploadedBy: string }) {
   return {
-    title: "Dokumen Uji WhatsApp",
+    title: "WhatsApp Test Document",
     documentNumber: `DOC-${randomUUID()}`,
     documentType: "procedure",
     revision: "0",
-    originalFilename: "uji.pdf",
+    originalFilename: "test.pdf",
     mimeType: "application/pdf",
     fileSize: 10,
     sha256: randomUUID().replace(/-/g, "").padEnd(64, "0"),
@@ -97,49 +97,55 @@ describe("handleIncomingWhatsappMessage", () => {
   it("replies with a not-registered message for an unlinked phone number", async () => {
     const reply = await handleIncomingWhatsappMessage({
       phoneNumber: "6289999999999",
-      text: "halo",
+      text: "hello",
     });
-    expect(reply).toContain("belum terdaftar");
+    expect(reply).toContain("not registered");
   });
 
   it("answers via the real askQuestion pipeline and folds sources into plain text", async () => {
     const { chunk } = await seedAccessibleChunk(
-      "Prosedur keselamatan kerja boiler tekanan tinggi harus diperiksa setiap hari.",
+      "High-pressure boiler safety procedures must be inspected daily.",
     );
     await db.insert(whatsappLinks).values({ phoneNumber: PHONE, userId, linkedBy: userId });
 
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "answered",
-        answer: "Teknisi bersertifikat memeriksa tekanan boiler setiap hari.",
+        answer: "A certified technician checks the boiler pressure every day.",
         claims: [
-          { text: "Teknisi bersertifikat memeriksa tekanan boiler.", source_chunk_ids: [chunk.id] },
+          {
+            text: "A certified technician checks the boiler pressure.",
+            source_chunk_ids: [chunk.id],
+          },
         ],
       }),
     );
 
     const reply = await handleIncomingWhatsappMessage({
       phoneNumber: PHONE,
-      text: "Siapa yang memeriksa tekanan boiler?",
+      text: "Who checks the boiler pressure?",
     });
 
-    expect(reply).toContain("Teknisi bersertifikat memeriksa tekanan boiler setiap hari.");
-    expect(reply).toContain("Sumber:");
-    expect(reply).toContain("Dokumen Uji WhatsApp");
+    expect(reply).toContain("A certified technician checks the boiler pressure every day.");
+    expect(reply).toContain("_Sources:_");
+    expect(reply).toContain("WhatsApp Test Document");
   });
 
   it("reuses the same conversation across messages (history-aware, like web chat)", async () => {
-    const { chunk } = await seedAccessibleChunk("Tekanan maksimum boiler adalah 12 bar.");
+    const { chunk } = await seedAccessibleChunk("The maximum boiler pressure is 12 bar.");
     await db.insert(whatsappLinks).values({ phoneNumber: PHONE, userId, linkedBy: userId });
 
     mockedGenerateChatCompletion.mockResolvedValueOnce(
       JSON.stringify({
         status: "answered",
-        answer: "Tekanan maksimum boiler adalah 12 bar.",
+        answer: "The maximum boiler pressure is 12 bar.",
         claims: [{ text: "12 bar.", source_chunk_ids: [chunk.id] }],
       }),
     );
-    await handleIncomingWhatsappMessage({ phoneNumber: PHONE, text: "Berapa tekanan maksimum?" });
+    await handleIncomingWhatsappMessage({
+      phoneNumber: PHONE,
+      text: "What is the maximum pressure?",
+    });
 
     const [linkAfterFirst] = await db
       .select()
@@ -148,9 +154,9 @@ describe("handleIncomingWhatsappMessage", () => {
     expect(linkAfterFirst.currentConversationId).not.toBeNull();
 
     mockedGenerateChatCompletion.mockResolvedValueOnce(
-      JSON.stringify({ status: "answered", answer: "Masih 12 bar.", claims: [] }),
+      JSON.stringify({ status: "answered", answer: "Still 12 bar.", claims: [] }),
     );
-    await handleIncomingWhatsappMessage({ phoneNumber: PHONE, text: "Yakin?" });
+    await handleIncomingWhatsappMessage({ phoneNumber: PHONE, text: "Are you sure?" });
 
     const [linkAfterSecond] = await db
       .select()
@@ -161,7 +167,7 @@ describe("handleIncomingWhatsappMessage", () => {
     const secondCallMessages = mockedGenerateChatCompletion.mock.calls[1][0];
     expect(secondCallMessages).toContainEqual({
       role: "user",
-      content: "Berapa tekanan maksimum?",
+      content: "What is the maximum pressure?",
     });
 
     await db
@@ -184,9 +190,9 @@ describe("handleIncomingWhatsappMessage", () => {
     try {
       const reply = await handleIncomingWhatsappMessage({
         phoneNumber: "6287777777777",
-        text: "halo",
+        text: "hello",
       });
-      expect(reply).toContain("belum terdaftar");
+      expect(reply).toContain("not registered");
       expect(mockedGenerateChatCompletion).not.toHaveBeenCalled();
     } finally {
       await db.delete(whatsappLinks).where(eq(whatsappLinks.userId, deactivated.id));
@@ -195,7 +201,7 @@ describe("handleIncomingWhatsappMessage", () => {
   });
 
   it("shares the same rate-limit bucket as web chat (keyed by userId, not phone number)", async () => {
-    await seedAccessibleChunk("Konten apa saja.");
+    await seedAccessibleChunk("Any content at all.");
     await db.insert(whatsappLinks).values({ phoneNumber: PHONE, userId, linkedBy: userId });
 
     const original = env.CHAT_RATE_LIMIT_MAX_ATTEMPTS;
@@ -204,12 +210,12 @@ describe("handleIncomingWhatsappMessage", () => {
       mockedGenerateChatCompletion.mockResolvedValue(
         JSON.stringify({ status: "insufficient_evidence", answer: "", claims: [] }),
       );
-      await handleIncomingWhatsappMessage({ phoneNumber: PHONE, text: "pertanyaan 1" });
+      await handleIncomingWhatsappMessage({ phoneNumber: PHONE, text: "question 1" });
       const reply = await handleIncomingWhatsappMessage({
         phoneNumber: PHONE,
-        text: "pertanyaan 2",
+        text: "question 2",
       });
-      expect(reply).toContain("Terlalu banyak pertanyaan");
+      expect(reply).toContain("Too many questions");
     } finally {
       env.CHAT_RATE_LIMIT_MAX_ATTEMPTS = original;
     }

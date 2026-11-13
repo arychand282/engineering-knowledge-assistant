@@ -16,7 +16,7 @@ describe("local-storage", () => {
 
   it("rejects a storage key that attempts path traversal", async () => {
     await expect(saveFile("../../etc/passwd", Buffer.from("x"))).rejects.toThrow(
-      /storageKey tidak valid/,
+      /Invalid storageKey/,
     );
   });
 });

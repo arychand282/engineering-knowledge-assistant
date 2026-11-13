@@ -34,7 +34,7 @@ describe("env defaults", () => {
       delete process.env.OPENAI_API_KEY;
       delete process.env.ANTHROPIC_API_KEY;
 
-      await expect(import("@/lib/env")).rejects.toThrow(/wajib diisi/);
+      await expect(import("@/lib/env")).rejects.toThrow(/must be set/);
     },
   );
 
@@ -65,7 +65,7 @@ describe("env defaults", () => {
       delete process.env.GEMINI_API_KEY;
       delete process.env.OPENAI_API_KEY;
 
-      await expect(import("@/lib/env")).rejects.toThrow(/wajib diisi/);
+      await expect(import("@/lib/env")).rejects.toThrow(/must be set/);
     },
   );
 

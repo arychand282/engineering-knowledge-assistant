@@ -51,7 +51,7 @@ describe("embedTexts dispatcher", () => {
 
     expect(embedTextsGemini).toHaveBeenCalledWith(texts);
     expect(embedTextsOllama).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("PERINGATAN"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("WARNING"));
     warnSpy.mockRestore();
   });
 

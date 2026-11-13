@@ -51,7 +51,7 @@ describe("generateChatCompletion dispatcher", () => {
 
     expect(generateGeminiChatCompletion).toHaveBeenCalledWith(messages);
     expect(generateOllamaChatCompletion).not.toHaveBeenCalled();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("PERINGATAN"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("WARNING"));
     warnSpy.mockRestore();
   });
 

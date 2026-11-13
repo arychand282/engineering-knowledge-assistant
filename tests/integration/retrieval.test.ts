@@ -98,16 +98,16 @@ beforeAll(async () => {
 
   const [docA] = await db
     .insert(documents)
-    .values(fakeDocument({ title: "Prosedur Boiler", uploadedBy: userGrantedId }))
+    .values(fakeDocument({ title: "Boiler Procedure", uploadedBy: userGrantedId }))
     .returning();
   const [docB] = await db
     .insert(documents)
-    .values(fakeDocument({ title: "Panduan Forklift", uploadedBy: userGrantedId }))
+    .values(fakeDocument({ title: "Forklift Guide", uploadedBy: userGrantedId }))
     .returning();
   const [docC] = await db
     .insert(documents)
     .values(
-      fakeDocument({ title: "Prosedur Pemesanan Alat Tulis Kantor", uploadedBy: userGrantedId }),
+      fakeDocument({ title: "Office Stationery Ordering Procedure", uploadedBy: userGrantedId }),
     )
     .returning();
   docAId = docA.id;
@@ -123,18 +123,18 @@ beforeAll(async () => {
   ]);
 
   const contentA =
-    "Prosedur keselamatan kerja boiler tekanan tinggi harus diperiksa setiap hari oleh teknisi.";
+    "High-pressure boiler safety procedures must be inspected daily by a technician.";
   const contentB =
-    "Panduan pemeliharaan forklift gudang logistik dilakukan setiap bulan oleh operator.";
+    "Warehouse forklift maintenance guidelines are carried out monthly by the operator.";
   const contentC =
-    "Prosedur pemesanan alat tulis kantor dilakukan melalui formulir permintaan barang.";
+    "Office stationery ordering procedures are carried out through a goods request form.";
   // Second chunk of docA itself (not a separate document) — scores close to contentA for
-  // the shared test query (~0.90 vs ~0.92, well inside VECTOR_SIMILARITY_MARGIN's default
-  // 0.2 gap), unlike docB/docC which score ~0.6 and get filtered out post-fix. The
-  // RERANK_ENABLED tests below need two genuinely-plausible candidates to reorder between;
-  // reusing an unrelated document for that (as before this fix) no longer reflects reality.
+  // the shared test query (well inside VECTOR_SIMILARITY_MARGIN's gap), unlike docB/docC
+  // which score much lower and get filtered out post-fix. The RERANK_ENABLED tests below
+  // need two genuinely-plausible candidates to reorder between; reusing an unrelated
+  // document for that (as before this fix) no longer reflects reality.
   const contentA2 =
-    "Katup pelepas tekanan boiler wajib diuji oleh teknisi bersertifikat setiap minggu untuk menjaga keselamatan.";
+    "The boiler pressure relief valve must be tested weekly by a certified technician to maintain safety.";
 
   const [embeddingA, embeddingB, embeddingC, embeddingA2] = await embedTexts([
     contentA,
@@ -198,7 +198,7 @@ afterAll(async () => {
 describe("searchDocuments", () => {
   it("ranks the relevant accessible chunk above an unrelated accessible chunk", async () => {
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 
@@ -211,11 +211,11 @@ describe("searchDocuments", () => {
 
   it("excludes an accessible but semantically unrelated chunk (VECTOR_SIMILARITY_MARGIN)", async () => {
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 
-    // docC ("pemesanan alat tulis kantor") is accessible to this user — same role as
+    // docC ("office stationery ordering") is accessible to this user — same role as
     // docA — but has nothing to do with the query. On a corpus this small there aren't
     // enough real candidates to naturally push an unrelated chunk out of the top-K by
     // rank alone; without a minimum similarity floor it would still show up here.
@@ -224,7 +224,7 @@ describe("searchDocuments", () => {
 
   it("never returns a document outside the user's granted role (no cross-user leakage)", async () => {
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userOtherId,
     });
 
@@ -234,7 +234,7 @@ describe("searchDocuments", () => {
 
   it("returns nothing for a user with no role/document access at all", async () => {
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userNoRoleId,
     });
 
@@ -244,7 +244,7 @@ describe("searchDocuments", () => {
 
   it("never calls the reranker when RERANK_ENABLED is off (the default)", async () => {
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 
@@ -280,7 +280,7 @@ describe("searchDocuments with RERANK_ENABLED", () => {
     });
 
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 
@@ -295,7 +295,7 @@ describe("searchDocuments with RERANK_ENABLED", () => {
     mockedGenerateChatCompletion.mockResolvedValueOnce("not valid json");
 
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 
@@ -308,7 +308,7 @@ describe("searchDocuments with RERANK_ENABLED", () => {
     env.CHAT_PROVIDER = "gemini";
 
     const result = await searchDocuments({
-      query: "keselamatan boiler tekanan tinggi",
+      query: "high pressure boiler safety",
       userId: userGrantedId,
     });
 

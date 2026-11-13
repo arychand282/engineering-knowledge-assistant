@@ -27,7 +27,7 @@ function managementActor() {
 
 function baseMetadata(overrides: Partial<Parameters<typeof uploadDocument>[0]["metadata"]> = {}) {
   return {
-    title: "Dokumen Uji OCR",
+    title: "OCR Test Document",
     documentNumber: `DOC-${randomUUID()}`,
     documentType: "procedure",
     revision: "0",
@@ -62,7 +62,7 @@ afterAll(async () => {
 
 describe("runOcrOnPages (real tesseract.js engine)", () => {
   it("recognizes real text from a scanned (image-only) page and marks provenance", async () => {
-    const pdf = buildTestScannedPdf("Tekanan maksimum boiler adalah 12 bar");
+    const pdf = buildTestScannedPdf("The maximum boiler pressure is 12 bar");
     const classified = [{ pageNumber: 1, text: "", status: "ocr_required" as const }];
 
     const result = await runOcrOnPages(new Uint8Array(pdf), classified);
@@ -70,13 +70,13 @@ describe("runOcrOnPages (real tesseract.js engine)", () => {
     expect(result).toHaveLength(1);
     expect(result[0].status).toBe("success");
     expect(result[0].isOcr).toBe(true);
-    expect(result[0].text).toContain("Tekanan maksimum boiler adalah 12 bar");
+    expect(result[0].text).toContain("The maximum boiler pressure is 12 bar");
     expect(result[0].ocrConfidence).toBeGreaterThan(env.OCR_MIN_CONFIDENCE);
   }, 30_000);
 
   it("returns pages unchanged (no worker spun up) when nothing needs OCR", async () => {
-    const pages = [{ pageNumber: 1, text: "halo", status: "success" as const }];
-    const result = await runOcrOnPages(new Uint8Array(buildTestPdf([{ text: "halo" }])), pages);
+    const pages = [{ pageNumber: 1, text: "hello", status: "success" as const }];
+    const result = await runOcrOnPages(new Uint8Array(buildTestPdf([{ text: "hello" }])), pages);
     expect(result).toEqual(pages);
   }, 10_000);
 
@@ -84,7 +84,7 @@ describe("runOcrOnPages (real tesseract.js engine)", () => {
     const original = env.OCR_MIN_CONFIDENCE;
     env.OCR_MIN_CONFIDENCE = 101; // impossible to clear — forces the reject branch
     try {
-      const pdf = buildTestScannedPdf("Tekanan maksimum boiler adalah 12 bar");
+      const pdf = buildTestScannedPdf("The maximum boiler pressure is 12 bar");
       const classified = [{ pageNumber: 1, text: "", status: "ocr_required" as const }];
       const result = await runOcrOnPages(new Uint8Array(pdf), classified);
 
@@ -99,7 +99,7 @@ describe("runOcrOnPages (real tesseract.js engine)", () => {
     const original = env.OCR_LANG_DATA_DIR;
     env.OCR_LANG_DATA_DIR = "/nonexistent/path/for/testing";
     try {
-      const pdf = buildTestScannedPdf("halo dunia");
+      const pdf = buildTestScannedPdf("hello world");
       const classified = [{ pageNumber: 1, text: "", status: "ocr_required" as const }];
       const result = await runOcrOnPages(new Uint8Array(pdf), classified);
       expect(result).toEqual(classified);
@@ -112,7 +112,7 @@ describe("runOcrOnPages (real tesseract.js engine)", () => {
     const original = env.OCR_TIMEOUT_MS;
     env.OCR_TIMEOUT_MS = 1; // real recognition always takes far longer than 1ms
     try {
-      const pdf = buildTestScannedPdf("Tekanan maksimum boiler adalah 12 bar");
+      const pdf = buildTestScannedPdf("The maximum boiler pressure is 12 bar");
       const classified = [{ pageNumber: 1, text: "", status: "ocr_required" as const }];
       const result = await runOcrOnPages(new Uint8Array(pdf), classified);
       expect(result).toEqual(classified);
@@ -136,7 +136,7 @@ describe("createOcrWorker", () => {
 
 describe("uploadDocument (OCR end-to-end)", () => {
   it("OCRs a scanned PDF on upload, making it searchable (chunked + embedded)", async () => {
-    const pdf = buildTestScannedPdf("Prosedur evakuasi gedung kantor pusat");
+    const pdf = buildTestScannedPdf("Head office building evacuation procedure");
 
     const result = await uploadDocument({
       file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "scan.pdf" },
@@ -150,7 +150,7 @@ describe("uploadDocument (OCR end-to-end)", () => {
 
     const detail = await getDocument(result.document.id, managementActor());
     expect(detail.pages[0]).toMatchObject({ extractionStatus: "success", isOcr: true });
-    expect(detail.pages[0].extractedText).toContain("Prosedur evakuasi gedung kantor pusat");
+    expect(detail.pages[0].extractedText).toContain("Head office building evacuation procedure");
     expect(detail.pages[0].ocrConfidence).toBeGreaterThan(0);
   }, 30_000);
 
@@ -158,7 +158,7 @@ describe("uploadDocument (OCR end-to-end)", () => {
     const original = env.OCR_ENABLED;
     env.OCR_ENABLED = false;
     try {
-      const pdf = buildTestScannedPdf("Konten yang seharusnya tidak di-OCR");
+      const pdf = buildTestScannedPdf("Content that should not be OCR'd");
       const result = await uploadDocument({
         file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "scan-off.pdf" },
         metadata: baseMetadata(),

@@ -49,8 +49,8 @@ describe("resolveSupportedDocumentFormat", () => {
 
 describe("computeSha256", () => {
   it("is deterministic for the same content", () => {
-    const buffer = Buffer.from("isi dokumen uji");
-    expect(computeSha256(buffer)).toBe(computeSha256(Buffer.from("isi dokumen uji")));
+    const buffer = Buffer.from("test document content");
+    expect(computeSha256(buffer)).toBe(computeSha256(Buffer.from("test document content")));
   });
 
   it("differs for different content", () => {

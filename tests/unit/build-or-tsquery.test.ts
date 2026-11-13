@@ -3,12 +3,12 @@ import { buildOrTsQuery } from "@/lib/retrieval/build-or-tsquery";
 
 describe("buildOrTsQuery", () => {
   it("joins words with OR so any single word can match", () => {
-    expect(buildOrTsQuery("prosedur evakuasi kebakaran")).toBe("prosedur | evakuasi | kebakaran");
+    expect(buildOrTsQuery("fire evacuation procedure")).toBe("fire | evacuation | procedure");
   });
 
   it("strips punctuation and lowercases", () => {
-    expect(buildOrTsQuery("Bagaimana prosedur evakuasi kebakaran?")).toBe(
-      "bagaimana | prosedur | evakuasi | kebakaran",
+    expect(buildOrTsQuery("What is the fire evacuation procedure?")).toBe(
+      "what | is | the | fire | evacuation | procedure",
     );
   });
 

@@ -39,7 +39,7 @@ function managementActor() {
 
 function baseMetadata(overrides: Partial<Parameters<typeof uploadDocument>[0]["metadata"]> = {}) {
   return {
-    title: "Dokumen Uji Integrasi",
+    title: "Integration Test Document",
     documentNumber: `DOC-${randomUUID()}`,
     documentType: "procedure",
     revision: "0",
@@ -74,10 +74,10 @@ afterAll(async () => {
 
 describe("uploadDocument (real DB + real local storage)", () => {
   it("stores metadata, pages, and chunks for a normal text PDF", async () => {
-    const pdf = buildTestPdf([{ text: "Isi halaman pertama untuk pengujian unggahan dokumen." }]);
+    const pdf = buildTestPdf([{ text: "First page content for document upload testing." }]);
 
     const result = await uploadDocument({
-      file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "uji.pdf" },
+      file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "test.pdf" },
       metadata: baseMetadata(),
       uploadedBy: userId,
     });
@@ -97,13 +97,13 @@ describe("uploadDocument (real DB + real local storage)", () => {
   });
 
   it("marks a blank page as empty and still stores the rest of the document", async () => {
-    const pdf = buildTestPdf([{ text: "Halaman satu ada isi." }, { text: "" }]);
+    const pdf = buildTestPdf([{ text: "Page one has content." }, { text: "" }]);
 
     const result = await uploadDocument({
       file: {
         buffer: pdf,
         mimeType: "application/pdf",
-        originalFilename: "ada-halaman-kosong.pdf",
+        originalFilename: "has-blank-page.pdf",
       },
       metadata: baseMetadata(),
       uploadedBy: userId,
@@ -124,7 +124,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
 
     await expect(
       uploadDocument({
-        file: { buffer: corrupted, mimeType: "application/pdf", originalFilename: "rusak.pdf" },
+        file: { buffer: corrupted, mimeType: "application/pdf", originalFilename: "corrupted.pdf" },
         metadata: baseMetadata(),
         uploadedBy: userId,
       }),
@@ -140,7 +140,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
         file: {
           buffer: Buffer.from("plain text"),
           mimeType: "text/plain",
-          originalFilename: "bukan-pdf.txt",
+          originalFilename: "not-a-pdf.txt",
         },
         metadata: baseMetadata(),
         uploadedBy: userId,
@@ -149,7 +149,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
   });
 
   it("rejects a duplicate upload of the same file content", async () => {
-    const pdf = buildTestPdf([{ text: "Konten identik." }]);
+    const pdf = buildTestPdf([{ text: "Identical content." }]);
 
     const first = await uploadDocument({
       file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "a.pdf" },
@@ -175,7 +175,7 @@ describe("uploadDocument (real DB + real local storage)", () => {
       const pdf = buildTestPdf([{ text: "a" }]);
       await expect(
         uploadDocument({
-          file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "besar.pdf" },
+          file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "large.pdf" },
           metadata: baseMetadata(),
           uploadedBy: userId,
         }),
@@ -189,13 +189,13 @@ describe("uploadDocument (real DB + real local storage)", () => {
     const original = env.MAX_DOCUMENT_PAGES;
     env.MAX_DOCUMENT_PAGES = 1;
     try {
-      const pdf = buildTestPdf([{ text: "satu" }, { text: "dua" }]);
+      const pdf = buildTestPdf([{ text: "one" }, { text: "two" }]);
       await expect(
         uploadDocument({
           file: {
             buffer: pdf,
             mimeType: "application/pdf",
-            originalFilename: "banyak-halaman.pdf",
+            originalFilename: "too-many-pages.pdf",
           },
           metadata: baseMetadata(),
           uploadedBy: userId,
@@ -209,10 +209,10 @@ describe("uploadDocument (real DB + real local storage)", () => {
 
 describe("uploadDocument (DOCX via LibreOffice — requires soffice installed)", () => {
   it("converts via LibreOffice and extracts real page text, storing the original .docx", async () => {
-    const docx = buildTestDocx(["Isi paragraf pertama untuk pengujian DOCX."]);
+    const docx = buildTestDocx(["First paragraph content for DOCX testing."]);
 
     const result = await uploadDocument({
-      file: { buffer: docx, mimeType: DOCX_MIME_TYPE, originalFilename: "uji.docx" },
+      file: { buffer: docx, mimeType: DOCX_MIME_TYPE, originalFilename: "test.docx" },
       metadata: baseMetadata(),
       uploadedBy: userId,
     });
@@ -227,7 +227,7 @@ describe("uploadDocument (DOCX via LibreOffice — requires soffice installed)",
     expect(stored.equals(docx)).toBe(true);
 
     const detail = await getDocument(result.document.id, managementActor());
-    expect(detail.pages[0].extractedText).toContain("Isi paragraf pertama untuk pengujian DOCX.");
+    expect(detail.pages[0].extractedText).toContain("First paragraph content for DOCX testing.");
   }, 30_000);
 
   it("rejects a ZIP with valid magic bytes but no real DOCX parts inside", async () => {
@@ -235,7 +235,7 @@ describe("uploadDocument (DOCX via LibreOffice — requires soffice installed)",
 
     await expect(
       uploadDocument({
-        file: { buffer: garbage, mimeType: DOCX_MIME_TYPE, originalFilename: "rusak.docx" },
+        file: { buffer: garbage, mimeType: DOCX_MIME_TYPE, originalFilename: "corrupted.docx" },
         metadata: baseMetadata(),
         uploadedBy: userId,
       }),
@@ -248,7 +248,7 @@ describe("uploadDocument (DOCX via LibreOffice — requires soffice installed)",
 
 describe("reprocessDocument", () => {
   it("replaces pages/chunks for an existing document", async () => {
-    const pdf = buildTestPdf([{ text: "Versi awal konten dokumen." }]);
+    const pdf = buildTestPdf([{ text: "Original document content." }]);
     const uploaded = await uploadDocument({
       file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "reprocess.pdf" },
       metadata: baseMetadata(),
@@ -265,7 +265,7 @@ describe("reprocessDocument", () => {
 
     const after = await getDocument(uploaded.document.id, managementActor());
     expect(after.pages[0].id).not.toBe(firstPageId); // old row deleted, new one inserted
-    expect(after.pages[0].extractedText).toContain("Versi awal konten dokumen.");
+    expect(after.pages[0].extractedText).toContain("Original document content.");
   });
 
   it("throws DocumentNotFoundError for an unknown id", async () => {
@@ -273,7 +273,7 @@ describe("reprocessDocument", () => {
   });
 
   it("reprocesses a document that was already cited in a chat answer (real bug: FK violation deleting its old chunks)", async () => {
-    const pdf = buildTestPdf([{ text: "Konten yang akan dikutip di chat." }]);
+    const pdf = buildTestPdf([{ text: "Content that will be cited in chat." }]);
     const uploaded = await uploadDocument({
       file: { buffer: pdf, mimeType: "application/pdf", originalFilename: "cited.pdf" },
       metadata: baseMetadata(),
@@ -289,13 +289,13 @@ describe("reprocessDocument", () => {
     const [conversation] = await db.insert(conversations).values({ userId }).returning();
     await db
       .insert(messages)
-      .values({ conversationId: conversation.id, role: "user", content: "Pertanyaan uji" });
+      .values({ conversationId: conversation.id, role: "user", content: "Test question" });
     const [assistantMessage] = await db
       .insert(messages)
       .values({
         conversationId: conversation.id,
         role: "assistant",
-        content: "Jawaban yang mengutip dokumen ini.",
+        content: "Answer that cites this document.",
         answerStatus: "answered",
       })
       .returning();
@@ -304,7 +304,7 @@ describe("reprocessDocument", () => {
       documentId: uploaded.document.id,
       chunkId: chunk.id,
       pageNumber: 1,
-      quotedText: "Konten yang akan dikutip di chat.",
+      quotedText: "Content that will be cited in chat.",
     });
 
     // Before the fix: deleteChunksByDocumentId() inside reprocessDocument() threw a
@@ -319,7 +319,7 @@ describe("reprocessDocument", () => {
       .select()
       .from(messages)
       .where(eq(messages.id, assistantMessage.id));
-    expect(reloadedMessage.content).toBe("Jawaban yang mengutip dokumen ini.");
+    expect(reloadedMessage.content).toBe("Answer that cites this document.");
     const remainingSources = await db
       .select()
       .from(messageSources)
@@ -331,7 +331,7 @@ describe("reprocessDocument", () => {
   });
 
   it("re-converts a DOCX-sourced document via LibreOffice again (requires soffice installed)", async () => {
-    const docx = buildTestDocx(["Versi awal paragraf DOCX."]);
+    const docx = buildTestDocx(["Original DOCX paragraph."]);
     const uploaded = await uploadDocument({
       file: { buffer: docx, mimeType: DOCX_MIME_TYPE, originalFilename: "reprocess.docx" },
       metadata: baseMetadata(),
@@ -343,6 +343,6 @@ describe("reprocessDocument", () => {
     expect(result.pageCount).toBeGreaterThanOrEqual(1);
 
     const after = await getDocument(uploaded.document.id, managementActor());
-    expect(after.pages[0].extractedText).toContain("Versi awal paragraf DOCX.");
+    expect(after.pages[0].extractedText).toContain("Original DOCX paragraph.");
   }, 30_000);
 });

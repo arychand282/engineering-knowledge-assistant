@@ -47,7 +47,7 @@ describe("database schema (requires docker compose db running + migrations appli
     await inRolledBackTransaction(async (tx) => {
       const [site] = await tx
         .insert(sites)
-        .values({ code: `SITE-${randomUUID()}`, name: "Site Uji", siteType: "office" })
+        .values({ code: `SITE-${randomUUID()}`, name: "Test Site", siteType: "office" })
         .returning();
 
       const [role] = await tx
@@ -57,24 +57,24 @@ describe("database schema (requires docker compose db running + migrations appli
 
       const [user] = await tx
         .insert(users)
-        .values({ email: `user-${randomUUID()}@example.test`, name: "Pengguna Uji" })
+        .values({ email: `user-${randomUUID()}@example.test`, name: "Test User" })
         .returning();
 
       const [project] = await tx
         .insert(projects)
-        .values({ code: `PRJ-${randomUUID()}`, name: "Proyek Uji", siteId: site.id })
+        .values({ code: `PRJ-${randomUUID()}`, name: "Test Project", siteId: site.id })
         .returning();
 
       const [document] = await tx
         .insert(documents)
         .values({
-          title: "Dokumen Uji",
+          title: "Test Document",
           documentNumber: "DOC-001",
           documentType: "procedure",
           projectId: project.id,
           siteId: site.id,
           revision: "0",
-          originalFilename: "dokumen-uji.pdf",
+          originalFilename: "test-document.pdf",
           mimeType: "application/pdf",
           fileSize: 1024,
           sha256: "0".repeat(64),
@@ -90,7 +90,7 @@ describe("database schema (requires docker compose db running + migrations appli
         .values({
           documentId: document.id,
           pageNumber: 1,
-          extractedText: "Isi halaman 1",
+          extractedText: "Page 1 content",
           extractionStatus: "success",
         })
         .returning();
@@ -102,14 +102,14 @@ describe("database schema (requires docker compose db running + migrations appli
           pageStart: page.pageNumber,
           pageEnd: page.pageNumber,
           chunkIndex: 0,
-          content: "Potongan teks halaman 1",
+          content: "Page 1 text chunk",
           embedding: Array.from({ length: 768 }, () => 0),
         })
         .returning();
 
       const [conversation] = await tx
         .insert(conversations)
-        .values({ userId: user.id, title: "Percakapan Uji" })
+        .values({ userId: user.id, title: "Test Conversation" })
         .returning();
 
       const [message] = await tx
@@ -117,7 +117,7 @@ describe("database schema (requires docker compose db running + migrations appli
         .values({
           conversationId: conversation.id,
           role: "assistant",
-          content: "Jawaban berdasarkan dokumen uji.",
+          content: "Answer based on the test document.",
           answerStatus: "answered",
         })
         .returning();
@@ -127,7 +127,7 @@ describe("database schema (requires docker compose db running + migrations appli
         documentId: document.id,
         chunkId: chunk.id,
         pageNumber: page.pageNumber,
-        quotedText: "Isi halaman 1",
+        quotedText: "Page 1 content",
       });
 
       await tx.insert(auditEvents).values({
@@ -152,7 +152,7 @@ describe("database schema (requires docker compose db running + migrations appli
           pageStart: 5,
           pageEnd: 1,
           chunkIndex: 1,
-          content: "Rentang halaman tidak valid",
+          content: "Invalid page range",
         }),
       ).rejects.toThrow();
     });
@@ -161,7 +161,7 @@ describe("database schema (requires docker compose db running + migrations appli
   it("enforces the company_settings singleton via CHECK (id = 1)", async () => {
     await inRolledBackTransaction(async (tx) => {
       await expect(
-        tx.insert(companySettings).values({ id: 2, companyName: "Perusahaan Uji Lain" }),
+        tx.insert(companySettings).values({ id: 2, companyName: "Another Test Company" }),
       ).rejects.toThrow();
     });
   });

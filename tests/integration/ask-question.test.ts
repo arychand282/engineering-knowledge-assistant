@@ -34,11 +34,11 @@ const createdConversationIds: string[] = [];
 
 function fakeDocument(overrides: Partial<typeof documents.$inferInsert> & { uploadedBy: string }) {
   return {
-    title: "Dokumen Uji Chat",
+    title: "Chat Test Document",
     documentNumber: `DOC-${randomUUID()}`,
     documentType: "procedure",
     revision: "0",
-    originalFilename: "uji.pdf",
+    originalFilename: "test.pdf",
     mimeType: "application/pdf",
     fileSize: 10,
     sha256: randomUUID().replace(/-/g, "").padEnd(64, "0"),
@@ -106,7 +106,7 @@ async function seedAccessibleChunk(content: string) {
 describe("askQuestion", () => {
   it("returns insufficient_evidence without calling the LLM when there is no accessible evidence", async () => {
     const result = await askQuestion({
-      message: "Pertanyaan tanpa dokumen apa pun",
+      message: "Question with no documents at all",
       userId: otherUserId,
     });
     createdConversationIds.push(result.conversationId);
@@ -118,28 +118,31 @@ describe("askQuestion", () => {
 
   it("answers using the model when relevant accessible evidence exists, and persists sources", async () => {
     const { chunk } = await seedAccessibleChunk(
-      "Prosedur keselamatan kerja boiler tekanan tinggi harus diperiksa setiap hari oleh teknisi bersertifikat.",
+      "High-pressure boiler safety procedures must be inspected daily by a certified technician.",
     );
 
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "answered",
-        answer: "Teknisi bersertifikat wajib memeriksa tekanan boiler setiap hari.",
+        answer: "A certified technician must check the boiler pressure every day.",
         claims: [
-          { text: "Teknisi bersertifikat memeriksa tekanan boiler.", source_chunk_ids: [chunk.id] },
+          {
+            text: "A certified technician checks the boiler pressure.",
+            source_chunk_ids: [chunk.id],
+          },
         ],
       }),
     );
 
-    const result = await askQuestion({ message: "Siapa yang memeriksa tekanan boiler?", userId });
+    const result = await askQuestion({ message: "Who checks the boiler pressure?", userId });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("answered");
-    expect(result.message.content).toContain("Teknisi bersertifikat");
+    expect(result.message.content).toContain("certified technician");
     expect(result.sources).toHaveLength(1);
     expect(result.sources[0]).toMatchObject({
       chunkId: chunk.id,
-      documentTitle: "Dokumen Uji Chat",
+      documentTitle: "Chat Test Document",
       isOcr: false,
       ocrConfidence: null,
     });
@@ -153,7 +156,7 @@ describe("askQuestion", () => {
 
   it("surfaces OCR provenance (isOcr/ocrConfidence) on a source whose page was OCR'd", async () => {
     const { doc, chunk } = await seedAccessibleChunk(
-      "Tekanan maksimum vessel adalah 15 bar menurut hasil scan dokumen ini.",
+      "The maximum vessel pressure is 15 bar according to this scanned document.",
     );
     await db.insert(documentPages).values({
       documentId: doc.id,
@@ -166,12 +169,12 @@ describe("askQuestion", () => {
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "answered",
-        answer: "Tekanan maksimum vessel adalah 15 bar.",
+        answer: "The maximum vessel pressure is 15 bar.",
         claims: [{ text: "15 bar.", source_chunk_ids: [chunk.id] }],
       }),
     );
 
-    const result = await askQuestion({ message: "Berapa tekanan maksimum vessel?", userId });
+    const result = await askQuestion({ message: "What is the maximum vessel pressure?", userId });
     createdConversationIds.push(result.conversationId);
 
     expect(result.sources).toHaveLength(1);
@@ -179,17 +182,17 @@ describe("askQuestion", () => {
   });
 
   it("downgrades to insufficient_evidence when the model cites a chunk id that was never retrieved", async () => {
-    await seedAccessibleChunk("Konten dokumen yang tidak terkait dengan klaim model.");
+    await seedAccessibleChunk("Document content unrelated to the model's claim.");
 
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "answered",
-        answer: "Jawaban yang mengarang sumber.",
-        claims: [{ text: "Klaim palsu.", source_chunk_ids: [randomUUID()] }],
+        answer: "An answer that fabricates its source.",
+        claims: [{ text: "False claim.", source_chunk_ids: [randomUUID()] }],
       }),
     );
 
-    const result = await askQuestion({ message: "Pertanyaan apa saja", userId });
+    const result = await askQuestion({ message: "Any question", userId });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("insufficient_evidence");
@@ -198,7 +201,7 @@ describe("askQuestion", () => {
 
   it("overrides a model-claimed conflict_detected to answered when sources span only one document", async () => {
     const { chunk } = await seedAccessibleChunk(
-      "Prosedur evakuasi kebakaran gedung kantor pusat dilakukan oleh tim keselamatan setiap shift.",
+      "Head office fire evacuation procedures are carried out by the safety team every shift.",
     );
 
     // The model itself (incorrectly) claims a conflict despite citing a single document —
@@ -206,19 +209,21 @@ describe("askQuestion", () => {
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "conflict_detected",
-        answer: "Tim Keselamatan",
-        claims: [{ text: "Tim keselamatan melakukan evakuasi.", source_chunk_ids: [chunk.id] }],
+        answer: "Safety Team",
+        claims: [
+          { text: "The safety team carries out the evacuation.", source_chunk_ids: [chunk.id] },
+        ],
       }),
     );
 
     const result = await askQuestion({
-      message: "Siapa yang bertugas melakukan evakuasi kebakaran?",
+      message: "Who is responsible for carrying out the fire evacuation?",
       userId,
     });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("answered");
-    expect(result.message.content).toBe("Tim Keselamatan");
+    expect(result.message.content).toBe("Safety Team");
     expect(result.sources).toHaveLength(1);
   });
 
@@ -239,8 +244,8 @@ describe("askQuestion", () => {
     ]);
 
     const [embeddingOld, embeddingNew] = await embedTexts([
-      "Batas tekanan maksimum boiler adalah 10 bar menurut revisi lama.",
-      "Batas tekanan maksimum boiler adalah 12 bar menurut revisi baru.",
+      "The maximum boiler pressure limit is 10 bar according to the old revision.",
+      "The maximum boiler pressure limit is 12 bar according to the new revision.",
     ]);
     await db.insert(documentChunks).values([
       {
@@ -248,7 +253,7 @@ describe("askQuestion", () => {
         pageStart: 1,
         pageEnd: 1,
         chunkIndex: 0,
-        content: "Batas tekanan maksimum boiler adalah 10 bar menurut revisi lama.",
+        content: "The maximum boiler pressure limit is 10 bar according to the old revision.",
         embedding: embeddingOld,
       },
       {
@@ -256,12 +261,15 @@ describe("askQuestion", () => {
         pageStart: 1,
         pageEnd: 1,
         chunkIndex: 0,
-        content: "Batas tekanan maksimum boiler adalah 12 bar menurut revisi baru.",
+        content: "The maximum boiler pressure limit is 12 bar according to the new revision.",
         embedding: embeddingNew,
       },
     ]);
 
-    const result = await askQuestion({ message: "Berapa batas tekanan maksimum boiler?", userId });
+    const result = await askQuestion({
+      message: "What is the maximum boiler pressure limit?",
+      userId,
+    });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("conflict_detected");
@@ -271,10 +279,13 @@ describe("askQuestion", () => {
   });
 
   it("reports a safe error status when the local chat model is unreachable", async () => {
-    await seedAccessibleChunk("Prosedur evakuasi kebakaran gedung kantor pusat.");
+    await seedAccessibleChunk("Head office fire evacuation procedure.");
     mockedGenerateChatCompletion.mockRejectedValue(new OllamaUnavailableError());
 
-    const result = await askQuestion({ message: "Bagaimana prosedur evakuasi kebakaran?", userId });
+    const result = await askQuestion({
+      message: "What is the fire evacuation procedure?",
+      userId,
+    });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("error");
@@ -285,12 +296,12 @@ describe("askQuestion", () => {
     // Real behavior observed in Task 7 evaluation (CHAT_PROVIDER=local,
     // qwen2.5:3b-instruct): the model can self-report insufficient_evidence directly
     // (not via either backend downgrade) while leaving `answer` blank.
-    await seedAccessibleChunk("Konten dokumen yang tidak relevan dengan pertanyaan.");
+    await seedAccessibleChunk("Document content not relevant to the question.");
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({ status: "insufficient_evidence", answer: "", claims: [] }),
     );
 
-    const result = await askQuestion({ message: "Pertanyaan tidak relevan", userId });
+    const result = await askQuestion({ message: "Irrelevant question", userId });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("insufficient_evidence");
@@ -302,17 +313,17 @@ describe("askQuestion", () => {
     // insufficient_evidence while still citing a validatable chunk — showing a source
     // card on a message that says "can't answer" is self-contradictory to the user.
     const { chunk } = await seedAccessibleChunk(
-      "Pemesanan alat tulis kantor tiba dalam 3 hari kerja setelah formulir diajukan.",
+      "Stationery orders arrive within 3 business days after the form is submitted.",
     );
     mockedGenerateChatCompletion.mockResolvedValue(
       JSON.stringify({
         status: "insufficient_evidence",
-        answer: "Informasi yang tepat tidak dapat dipastikan dari dokumen yang diberikan.",
-        claims: [{ text: "Waktu tunggu 3 hari kerja.", source_chunk_ids: [chunk.id] }],
+        answer: "The exact information cannot be confirmed from the documents provided.",
+        claims: [{ text: "Wait time of 3 business days.", source_chunk_ids: [chunk.id] }],
       }),
     );
 
-    const result = await askQuestion({ message: "Berapa lama waktu tunggu pemesanan?", userId });
+    const result = await askQuestion({ message: "How long is the order wait time?", userId });
     createdConversationIds.push(result.conversationId);
 
     expect(result.message.answerStatus).toBe("insufficient_evidence");
@@ -321,18 +332,18 @@ describe("askQuestion", () => {
 
   it("sends prior turns of the same conversation as history to the model", async () => {
     const { chunk } = await seedAccessibleChunk(
-      "Tekanan maksimum boiler adalah 12 bar menurut SOP terbaru.",
+      "The maximum boiler pressure is 12 bar according to the latest SOP.",
     );
 
     mockedGenerateChatCompletion.mockResolvedValueOnce(
       JSON.stringify({
         status: "answered",
-        answer: "Tekanan maksimum boiler adalah 12 bar.",
-        claims: [{ text: "Tekanan maksimum 12 bar.", source_chunk_ids: [chunk.id] }],
+        answer: "The maximum boiler pressure is 12 bar.",
+        claims: [{ text: "Maximum pressure 12 bar.", source_chunk_ids: [chunk.id] }],
       }),
     );
     const first = await askQuestion({
-      message: "Berapa tekanan maksimum boiler?",
+      message: "What is the maximum boiler pressure?",
       userId,
     });
     createdConversationIds.push(first.conversationId);
@@ -340,13 +351,13 @@ describe("askQuestion", () => {
     mockedGenerateChatCompletion.mockResolvedValueOnce(
       JSON.stringify({
         status: "answered",
-        answer: "Sesuai SOP terbaru yang sama.",
-        claims: [{ text: "Sesuai SOP terbaru.", source_chunk_ids: [chunk.id] }],
+        answer: "Per the same latest SOP.",
+        claims: [{ text: "Per the latest SOP.", source_chunk_ids: [chunk.id] }],
       }),
     );
     await askQuestion({
       conversationId: first.conversationId,
-      message: "SOP yang mana?",
+      message: "Which SOP?",
       userId,
     });
 
@@ -354,42 +365,44 @@ describe("askQuestion", () => {
     const secondCallMessages = mockedGenerateChatCompletion.mock.calls[1][0];
     expect(secondCallMessages).toContainEqual({
       role: "user",
-      content: "Berapa tekanan maksimum boiler?",
+      content: "What is the maximum boiler pressure?",
     });
     expect(secondCallMessages).toContainEqual({
       role: "assistant",
-      content: "Tekanan maksimum boiler adalah 12 bar.",
+      content: "The maximum boiler pressure is 12 bar.",
     });
     // The current turn's question (with RAG context attached) must come after history,
     // not be swallowed by it.
-    expect(secondCallMessages.at(-1)?.content).toContain("SOP yang mana?");
+    expect(secondCallMessages.at(-1)?.content).toContain("Which SOP?");
   });
 
   it("omits history entirely when CHAT_HISTORY_LIMIT is 0", async () => {
-    const { chunk } = await seedAccessibleChunk("Konten dokumen uji batas riwayat percakapan.");
+    const { chunk } = await seedAccessibleChunk(
+      "Test document content for conversation history limit.",
+    );
     const original = env.CHAT_HISTORY_LIMIT;
     env.CHAT_HISTORY_LIMIT = 0;
     try {
       mockedGenerateChatCompletion.mockResolvedValueOnce(
         JSON.stringify({
           status: "answered",
-          answer: "Jawaban pertama.",
-          claims: [{ text: "Klaim pertama.", source_chunk_ids: [chunk.id] }],
+          answer: "First answer.",
+          claims: [{ text: "First claim.", source_chunk_ids: [chunk.id] }],
         }),
       );
-      const first = await askQuestion({ message: "Pertanyaan pertama", userId });
+      const first = await askQuestion({ message: "First question", userId });
       createdConversationIds.push(first.conversationId);
 
       mockedGenerateChatCompletion.mockResolvedValueOnce(
         JSON.stringify({
           status: "answered",
-          answer: "Jawaban kedua.",
-          claims: [{ text: "Klaim kedua.", source_chunk_ids: [chunk.id] }],
+          answer: "Second answer.",
+          claims: [{ text: "Second claim.", source_chunk_ids: [chunk.id] }],
         }),
       );
       await askQuestion({
         conversationId: first.conversationId,
-        message: "Pertanyaan kedua",
+        message: "Second question",
         userId,
       });
 
@@ -410,7 +423,7 @@ describe("askQuestion", () => {
     await expect(
       askQuestion({
         conversationId: conversation.id,
-        message: "Mencoba akses percakapan orang lain",
+        message: "Trying to access someone else's conversation",
         userId,
       }),
     ).rejects.toBeInstanceOf(ConversationNotFoundError);
