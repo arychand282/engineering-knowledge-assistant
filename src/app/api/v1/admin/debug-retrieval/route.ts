@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   let vectorError: string | null = null;
   try {
     const [embedding] = await embedTexts([q]);
-    vector = await searchChunksByVector(embedding, docIds, 10, 0); // margin 0 = unfiltered, raw scores
+    vector = await searchChunksByVector(embedding, docIds, 10, 1); // margin 1 = unfiltered (score is 0..1)
   } catch (error) {
     vectorError = error instanceof Error ? error.message : String(error);
   }
