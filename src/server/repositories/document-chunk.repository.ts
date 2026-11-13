@@ -66,8 +66,11 @@ export interface ChunkSearchResult {
  * for CLEARLY unrelated content shift a lot by language/content (measured ~0.48 on one
  * corpus, ~0.63 on another, for content with nothing to do with the query in both cases)
  * — no single global number separates relevant from irrelevant across corpora. The GAP
- * between the best match and an unrelated one stayed wide (~0.25-0.29) on both, which is
- * what this filters on instead.
+ * between the best match and an unrelated one is what this filters on instead — but even
+ * that gap's size depends on which embedding MODEL produced the vectors, not just the
+ * corpus (see VECTOR_SIMILARITY_MARGIN in env.ts: the same corpus/queries measured a much
+ * narrower gap against Gemini than against local Ollama/nomic-embed-text — don't assume a
+ * margin calibrated on one provider transfers to another without checking).
  */
 export async function searchChunksByVector(
   queryEmbedding: number[],

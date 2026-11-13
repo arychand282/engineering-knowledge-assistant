@@ -102,11 +102,20 @@ const baseEnvSchema = z.object({
   // content that has nothing to do with the query shifts a lot by corpus/language
   // (~0.48-0.49 on one test corpus, ~0.63-0.65 on another, both genuinely irrelevant), so
   // no single global score separates relevant from irrelevant everywhere. The GAP between
-  // the best match and an unrelated one stayed wide (~0.25-0.29) in both cases — this
-  // filters on that gap instead. 0.2 is a conservative margin below the smallest gap
-  // actually measured, so a legitimately-close second match (e.g. two conflicting
-  // document revisions, which should both stay in context) isn't accidentally dropped.
-  VECTOR_SIMILARITY_MARGIN: z.coerce.number().min(0).max(1).default(0.2),
+  // the best match and an unrelated one is what this filters on instead.
+  //
+  // IMPORTANT: that gap's absolute size depends on the embedding MODEL, not just the
+  // corpus — local dev defaults to Ollama/nomic-embed-text (gap measured ~0.25-0.29 on
+  // this project's demo corpus), but production uses Gemini (EMBEDDING_PROVIDER=gemini),
+  // whose gap on the *same* corpus/queries measured narrower: ~0.15 between the real
+  // match and an unrelated one, vs ~0.014 between two genuinely-conflicting document
+  // revisions (which must both stay in context). A margin calibrated against local scores
+  // (0.2) silently passed local tests while still failing in production, because 0.2 sits
+  // ABOVE Gemini's 0.15 irrelevant-gap — the margin must be checked against whichever
+  // provider is actually configured, not assumed portable from local testing. 0.08 sits
+  // between the smallest irrelevant gap (~0.15) and the legitimate near-duplicate gap
+  // (~0.014) measured against Gemini specifically.
+  VECTOR_SIMILARITY_MARGIN: z.coerce.number().min(0).max(1).default(0.08),
 
   // Full-text counterpart to VECTOR_SIMILARITY_MARGIN — see searchChunksByFullText for
   // why this is a RATIO of the top ts_rank score rather than a subtracted margin (ts_rank
