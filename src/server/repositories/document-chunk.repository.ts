@@ -108,11 +108,25 @@ export async function searchChunksByVector(
  * dictionary). Uses OR semantics (buildOrTsQuery) rather than plainto_tsquery's AND —
  * a natural-language question's own words (e.g. "bagaimana", "apa") otherwise have to
  * literally appear in the matched content too, which fails almost every real question.
+ *
+ * `scoreRatio` drops any result scoring below `scoreRatio * topScore` (see
+ * FULLTEXT_SCORE_RATIO in env.ts). This is the full-text counterpart to
+ * searchChunksByVector's `scoreMargin`, needed for the same reason — OR semantics plus
+ * 'simple' config (no stopword removal) means common English words like "is"/"the"/"for"
+ * are indexed and OR-matched like any other word, so a query can trivially match a
+ * completely unrelated document that just happens to share those. Measured: an unrelated
+ * document scored ~44-46% of the top match's ts_rank on filler-word overlap alone, while
+ * a genuinely-relevant second match (two conflicting document revisions, both legitimately
+ * on-topic) scored ~88% — a RATIO threshold is used here rather than a subtracted margin
+ * because ts_rank's absolute scale isn't normalized (it varies with document/chunk length
+ * in a way cosine similarity doesn't), so a fixed point difference doesn't transfer across
+ * content the way a fixed similarity gap does for vector search.
  */
 export async function searchChunksByFullText(
   query: string,
   documentIds: string[],
   limit: number,
+  scoreRatio: number,
 ): Promise<ChunkSearchResult[]> {
   const orQuery = buildOrTsQuery(query);
   if (documentIds.length === 0 || orQuery.length === 0) {
@@ -135,5 +149,14 @@ export async function searchChunksByFullText(
     .orderBy(desc(rank))
     .limit(limit);
 
-  return rows.map(({ rank: r, ...rest }) => ({ ...rest, score: r }));
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const topScore = rows[0].rank;
+  const minScore = topScore * scoreRatio;
+
+  return rows
+    .map(({ rank: r, ...rest }) => ({ ...rest, score: r }))
+    .filter((row) => row.score >= minScore);
 }

@@ -67,6 +67,7 @@ export async function searchDocuments(input: SearchDocumentsInput): Promise<Sear
     input.query,
     accessibleDocumentIds,
     candidateLimit,
+    env.FULLTEXT_SCORE_RATIO,
   );
 
   let vectorResults: ChunkSearchResult[] = [];

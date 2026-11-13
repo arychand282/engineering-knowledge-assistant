@@ -108,6 +108,15 @@ const baseEnvSchema = z.object({
   // document revisions, which should both stay in context) isn't accidentally dropped.
   VECTOR_SIMILARITY_MARGIN: z.coerce.number().min(0).max(1).default(0.2),
 
+  // Full-text counterpart to VECTOR_SIMILARITY_MARGIN — see searchChunksByFullText for
+  // why this is a RATIO of the top ts_rank score rather than a subtracted margin (ts_rank
+  // isn't normalized the way cosine similarity is). Measured: an unrelated document
+  // matched purely on common English filler words ("is"/"the"/"for" — 'simple' config has
+  // no stopword removal) scored ~44-46% of the top match; a genuinely-relevant second
+  // match (e.g. a conflicting document revision that should legitimately stay in context)
+  // scored ~88%. 0.6 sits in that gap.
+  FULLTEXT_SCORE_RATIO: z.coerce.number().min(0).max(1).default(0.6),
+
   // OPT-IN, default OFF — Ollama has no native cross-encoder/rerank model, so the only
   // local option is one extra chat-model call that scores/reorders candidates before
   // the final CHAT_RETRIEVAL_LIMIT is taken. This roughly doubles chat latency per
@@ -238,6 +247,7 @@ export type Env = {
   OLLAMA_CHAT_TIMEOUT_MS: number;
   CHAT_RETRIEVAL_LIMIT: number;
   VECTOR_SIMILARITY_MARGIN: number;
+  FULLTEXT_SCORE_RATIO: number;
   CHAT_HISTORY_LIMIT: number;
   RERANK_ENABLED: boolean;
   RERANK_CANDIDATE_LIMIT: number;
@@ -298,6 +308,7 @@ function loadEnv(): Env {
     OLLAMA_CHAT_TIMEOUT_MS: process.env.OLLAMA_CHAT_TIMEOUT_MS,
     CHAT_RETRIEVAL_LIMIT: process.env.CHAT_RETRIEVAL_LIMIT,
     VECTOR_SIMILARITY_MARGIN: process.env.VECTOR_SIMILARITY_MARGIN,
+    FULLTEXT_SCORE_RATIO: process.env.FULLTEXT_SCORE_RATIO,
     CHAT_HISTORY_LIMIT: process.env.CHAT_HISTORY_LIMIT,
     RERANK_ENABLED: process.env.RERANK_ENABLED,
     RERANK_CANDIDATE_LIMIT: process.env.RERANK_CANDIDATE_LIMIT,
